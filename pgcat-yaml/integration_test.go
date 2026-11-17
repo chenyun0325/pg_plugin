@@ -13,11 +13,23 @@ import (
 )
 
 func TestPostgresWALBidirectional(t *testing.T) {
+	testPostgresWALBidirectional(t, false)
+}
+
+func TestSidecarWALBidirectional(t *testing.T) {
+	testPostgresWALBidirectional(t, true)
+}
+
+func testPostgresWALBidirectional(t *testing.T, sidecar bool) {
 	dsn := os.Getenv("PGCAT_TEST_DSN")
 	if dsn == "" {
 		t.Skip("set PGCAT_TEST_DSN for isolated real-WAL test")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Minute)
+	timeout := 7 * time.Minute
+	if sidecar {
+		timeout = 30 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	db, e := pgx.Connect(ctx, dsn)
 	if e != nil {
@@ -55,8 +67,22 @@ func TestPostgresWALBidirectional(t *testing.T) {
 		_, _ = db.Exec(cleanup, "DROP SCHEMA IF EXISTS "+q(a)+","+q(b)+" CASCADE")
 		_, _ = db.Exec(cleanup, `DELETE FROM _pgcat_yaml.row_state WHERE job=ANY($1)`, []string{jobA, jobB})
 		_, _ = db.Exec(cleanup, `DELETE FROM _pgcat_yaml.checkpoint WHERE job=ANY($1)`, []string{jobA, jobB})
+		if sidecar {
+			for _, table := range []string{"identity_state", "identity_outbox"} {
+				_, _ = db.Exec(cleanup, "DELETE FROM _pgcat_yaml."+q(table)+" WHERE job=ANY($1)", []string{jobA, jobB})
+			}
+			for _, table := range []string{"row_binding", "identity_history", "key_spec"} {
+				_, _ = db.Exec(cleanup, "DELETE FROM _pgcat_yaml."+q(table)+" WHERE namespace=$1", prefix)
+			}
+		}
 	}()
 	rewrite := func(s string) string {
+		if sidecar {
+			s = strings.ReplaceAll(s, "pgcat_sidecar", "pgcat_demo")
+			s = strings.ReplaceAll(s, "sidecar_a_to_b_v1", "demo_a_to_b_v1")
+			s = strings.ReplaceAll(s, "sidecar_b_to_a_v1", "demo_b_to_a_v1")
+			s = strings.ReplaceAll(s, "orders_sidecar_v1", prefix)
+		}
 		s = strings.ReplaceAll(s, "pgcat_demo_a", a)
 		s = strings.ReplaceAll(s, "pgcat_demo_b", b)
 		s = strings.ReplaceAll(s, "demo_a_to_b_v1", jobA)
@@ -64,6 +90,12 @@ func TestPostgresWALBidirectional(t *testing.T) {
 		s = strings.ReplaceAll(s, "pgcat_demo_from_a", originA)
 		s = strings.ReplaceAll(s, "pgcat_demo_from_b", originB)
 		return s
+	}
+	example := func(name string) string {
+		if sidecar {
+			return "examples/sidecar/" + name
+		}
+		return "examples/" + name
 	}
 	execFile := func(path string) {
 		data, err := os.ReadFile(path)
@@ -80,8 +112,8 @@ func TestPostgresWALBidirectional(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	execFile("examples/schema.sql")
-	execFile("examples/seed.sql")
+	execFile(example("schema.sql"))
+	execFile(example("seed.sql"))
 	t.Setenv("PGCAT_A_DSN", dsn)
 	t.Setenv("PGCAT_B_DSN", dsn)
 	load := func(path string) *Config {
@@ -99,7 +131,7 @@ func TestPostgresWALBidirectional(t *testing.T) {
 		}
 		return c
 	}
-	ca, cb := load("examples/a-to-b.yaml"), load("examples/b-to-a.yaml")
+	ca, cb := load(example("a-to-b.yaml")), load(example("b-to-a.yaml"))
 	ra, e = openRuntime(ctx, ca)
 	if e != nil {
 		t.Fatal(e)
@@ -121,7 +153,11 @@ func TestPostgresWALBidirectional(t *testing.T) {
 		t.Fatal(e)
 	}
 	pump := func() {
-		for i := 0; i < 3; i++ {
+		rounds := 3
+		if sidecar {
+			rounds = 2
+		}
+		for i := 0; i < rounds; i++ {
 			if _, err := ra.poll(); err != nil {
 				t.Fatal("A poll:", err)
 			}
@@ -255,5 +291,91 @@ func TestPostgresWALBidirectional(t *testing.T) {
 		t.Fatal(e)
 	}
 	assert("SELECT count(*)::text FROM "+q(b)+".orders WHERE order_id=404", "1")
+	if sidecar {
+		assert("SELECT count(*)::text FROM information_schema.columns WHERE table_schema IN ('"+a+"','"+b+"') AND column_name LIKE '\\_sync\\_%'", "0")
+		bindingID := func(table, pk string) string {
+			return scalar("SELECT identity->>'entity_id' FROM _pgcat_yaml.row_binding WHERE namespace='" + prefix + "' AND node_id='legacy' AND table_name='" + table + "' AND pk='" + pk + "'")
+		}
+		exec := func(sql string) {
+			t.Helper()
+			if _, err := db.Exec(ctx, sql); err != nil {
+				t.Fatal(err)
+			}
+		}
+		// Same physical key reused twice inside one source transaction creates two
+		// generations. UPDATE changing the physical PK preserves the later entity.
+		exec("INSERT INTO " + q(a) + `.orders_0 VALUES(505,4,'{"customer":{"name":"first"},"outbound_id":505,"note":"first"}')`)
+		pump()
+		firstID := bindingID(a+".orders_0", "[505]")
+		exec("BEGIN; DELETE FROM " + q(a) + ".orders_0 WHERE id=505; INSERT INTO " + q(a) + `.orders_0 VALUES(505,4,'{"customer":{"name":"second"},"outbound_id":505,"note":"second"}'); COMMIT`)
+		pump()
+		secondID := bindingID(a+".orders_0", "[505]")
+		if firstID == secondID {
+			t.Fatal("delete/reinsert reused entity generation")
+		}
+		assert("SELECT count(DISTINCT identity->>'entity_id')::text FROM _pgcat_yaml.identity_history WHERE namespace='"+prefix+"' AND table_name='"+a+".orders_0' AND pk='[505]'", "2")
+		exec("UPDATE " + q(a) + ".orders_0 SET id=506 WHERE id=505")
+		pump()
+		if got := bindingID(a+".orders_0", "[506]"); got != secondID {
+			t.Fatal("PK update changed logical identity", got, secondID)
+		}
+		assert("SELECT alive::text FROM _pgcat_yaml.row_binding WHERE namespace='"+prefix+"' AND table_name='"+a+".orders_0' AND pk='[505]'", "false")
+		assert("SELECT count(*)::text FROM "+q(b)+".orders WHERE order_id=506", "1")
+		// Target committed, then source registry committed, but source-outbox ack
+		// fails. Restart repeats the source write without duplicate business DML.
+		exec("UPDATE " + q(a) + ".orders_0 SET tenant_id=8 WHERE id=506")
+		ra.afterOutboxSourceCommit = func() error { return fmt.Errorf("injected source registry commit before ack") }
+		if _, err := ra.poll(); err == nil {
+			t.Fatal("expected source registry ack interruption")
+		}
+		assert("SELECT tenant_id::text FROM "+q(b)+".orders WHERE order_id=506", "8")
+		assert("SELECT (count(*)>0)::text FROM _pgcat_yaml.identity_outbox WHERE job='"+jobA+"'", "true")
+		ra.afterOutboxSourceCommit = nil
+		pump()
+		assert("SELECT count(*)::text FROM _pgcat_yaml.identity_outbox WHERE job='"+jobA+"'", "0")
+		// A queued older source observation cannot replace a newer target binding.
+		tx, err := db.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		stale := newIdentity(prefix, "legacy", a+".orders_0", "[506]", "stale")
+		if err = writeBinding(ctx, tx, prefix, "legacy", a+".orders_0", "[506]", stale, true, "0/1"); err != nil {
+			tx.Rollback(ctx)
+			t.Fatal(err)
+		}
+		if err = tx.Commit(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if bindingID(a+".orders_0", "[506]") != secondID {
+			t.Fatal("stale source observation replaced current identity")
+		}
+		// Ownership conflicts abort the whole target transaction.
+		exec("INSERT INTO " + q(b) + `.orders VALUES('foreign-unbound',707,2,'foreign',707,'n','{}')`)
+		posBefore, _, err := rb.position()
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Existing unbound A row cannot be adopted by a B-origin entity.
+		exec("INSERT INTO " + q(a) + `.orders_0 VALUES(707,2,'{"customer":{"name":"local"},"outbound_id":707,"note":"local"}')`)
+		if _, err = rb.poll(); err == nil {
+			t.Fatal("unbound business ownership conflict accepted")
+		}
+		posAfter, _, err := rb.position()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if posBefore != posAfter {
+			t.Fatal("conflict committed checkpoint")
+		}
+		assert("SELECT param->'customer'->>'name' FROM "+q(a)+".orders_0 WHERE id=707", "local")
+		// Restore the fixture then allow the original independent entity through.
+		exec("DELETE FROM " + q(a) + ".orders_0 WHERE id=707")
+		if _, err = rb.poll(); err != nil {
+			t.Fatal(err)
+		}
+		// Do not forward A's intentional insert/delete for the conflicting key;
+		// test objects are about to be dropped, so leave their source slot pending.
+		t.Log("PASS sidecar generations, physical PK update, durable outbox retry, stale observation guard, ownership rollback, zero provenance columns")
+	}
 	t.Log(fmt.Sprintf("PASS actual PG WAL: snapshot, JSON int64, TOAST, CDC, shard relocation, vertical patch/delete, provenance, loop quiescence, restart, rollback and post-commit replay (%s)", prefix))
 }

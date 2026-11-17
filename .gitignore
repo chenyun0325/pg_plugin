@@ -5,3 +5,4 @@ pgcat-yaml/bin/
 /env.txt
 /job-yaml/
 output/**/bin/
+/output/pgcat-sidecar-source.zip

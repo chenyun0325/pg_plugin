@@ -23,10 +23,16 @@ type Config struct {
 		Snapshot    string `yaml:"snapshot"` // copy or seed (state only)
 	} `yaml:"source"`
 	Sink struct {
+		ID     string `yaml:"id,omitempty"`
 		DSNEnv string `yaml:"dsn-env"`
 		Origin string `yaml:"origin"`
 	} `yaml:"sink"`
-	Routes []Route `yaml:"route"`
+	Routes   []Route `yaml:"route"`
+	Identity struct {
+		Mode      string `yaml:"mode,omitempty"`
+		Namespace string `yaml:"namespace,omitempty"`
+		Bootstrap string `yaml:"bootstrap,omitempty"`
+	} `yaml:"identity,omitempty"`
 	digest string
 }
 type Route struct {
@@ -86,6 +92,27 @@ func loadConfig(path string) (*Config, error) {
 	if c.Source.Snapshot != "copy" && c.Source.Snapshot != "seed" {
 		return nil, fmt.Errorf("snapshot must be copy or seed")
 	}
+	if c.Identity.Mode == "" {
+		c.Identity.Mode = "columns"
+	}
+	if c.Identity.Mode != "columns" && c.Identity.Mode != "sidecar" {
+		return nil, fmt.Errorf("identity.mode must be columns or sidecar")
+	}
+	if c.sidecar() {
+		if c.Identity.Namespace == "" || c.Sink.ID == "" || c.Source.Plugin != "pgoutput" {
+			return nil, fmt.Errorf("sidecar requires identity.namespace, sink.id and pgoutput")
+		}
+		if c.Identity.Bootstrap == "" {
+			if c.Source.Snapshot == "seed" {
+				c.Identity.Bootstrap = "require-binding"
+			} else {
+				c.Identity.Bootstrap = "local"
+			}
+		}
+		if c.Identity.Bootstrap != "local" && c.Identity.Bootstrap != "require-binding" {
+			return nil, fmt.Errorf("identity.bootstrap must be local or require-binding")
+		}
+	}
 	if !regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`).MatchString(c.Source.Slot) {
 		return nil, fmt.Errorf("invalid slot")
 	}
@@ -96,6 +123,13 @@ func loadConfig(path string) (*Config, error) {
 			return nil, fmt.Errorf("route %d invalid name/keys/target", i)
 		}
 		seen[r.Name] = true
+		if c.sidecar() {
+			for _, key := range r.Keys {
+				if strings.HasPrefix(key, "_sync_") {
+					return nil, fmt.Errorf("sidecar route %s must use real business keys, not %s", r.Name, key)
+				}
+			}
+		}
 		for _, p := range strings.Split(r.Source, ",") {
 			re, e := regexp.Compile("^(?:" + strings.TrimSpace(p) + ")$")
 			if e != nil {
@@ -137,6 +171,7 @@ func loadConfig(path string) (*Config, error) {
 	c.digest = hex.EncodeToString(sum[:])
 	return c, nil
 }
+func (c *Config) sidecar() bool { return c.Identity.Mode == "sidecar" }
 func qualified(s string) bool {
 	p := strings.Split(s, ".")
 	return len(p) == 2 && p[0] != "" && p[1] != ""

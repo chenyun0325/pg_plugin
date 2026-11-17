@@ -1,5 +1,7 @@
 # pgcat-yaml：PG16+ / PG18 的 YAML 合分表复制程序
 
+新增旁路身份模式：业务表不添加 `_sync_*` 列。配置、无来源列示例、编译运行与恢复步骤见 [SIDECAR.md](SIDECAR.md)。本文其余示例保留原 columns 模式；新实现与旧模式在 `codex/sidecar-identity-map` 分支共存，老版本已保存在 master / `pgcat-columns-baseline-20261117`。
+
 这是独立、可编译的 Go 复制程序，参考 kingluo/pgcat 的“逻辑解码 -> SQL 目标应用 -> 同事务进度 + replication origin”设计，参考 pg-flo 的规则 / 路由分层，重新实现 YAML 配置、全量、真实 WAL、持久镜像和变更路由。不是在旧版 Go 包上只增加一层 Adapter，也不是声称已向上游合并的补丁。旧版源码仍保留在工作区 reference/。
 
 ## 1. 本版实现范围

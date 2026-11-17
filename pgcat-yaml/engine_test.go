@@ -81,7 +81,7 @@ func TestPatchPreservesJSON(t *testing.T) {
 }
 func TestConvertUserJob(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "wms.yaml")
-	if e := convertWMS("../job-yaml/mysql-shards-to-postgres18-wms-fix.yaml", out); e != nil {
+	if e := convertWMS("testdata/wms-routes.yaml", out); e != nil {
 		t.Fatal(e)
 	}
 	c, e := loadConfig(out)

@@ -1,0 +1,48 @@
+version: 1
+job: sidecar_b_to_a_v1
+source:
+  id: new_app
+  dsn-env: PGCAT_B_DSN
+  publication: pgcat_sidecar_b_pub
+  slot: pgcat_sidecar_b_v1
+  plugin: pgoutput
+  snapshot: seed
+sink:
+  id: legacy
+  dsn-env: PGCAT_A_DSN
+  origin: pgcat_sidecar_from_b
+identity:
+  mode: sidecar
+  namespace: orders_sidecar_v1
+  bootstrap: require-binding
+route:
+  - &shard
+    name: split_even
+    source-table: 'pgcat_sidecar_b\.orders'
+    sink-table: pgcat_sidecar_a.orders_0
+    source-key: [record_key]
+    primary-keys: [id]
+    adopt-unmarked-source: legacy
+    when: {field: tenant_id, modulus: 2, remainder: 0}
+    columns:
+      id: {from: order_id}
+      tenant_id: {from: tenant_id}
+      param: {from: payload}
+    json-patches:
+      param:
+        - {path: [customer, name], value: {from: customer_name}}
+        - {path: [outbound_id], value: {from: outbound_id}}
+        - {path: [note], value: {from: note}}
+  - <<: *shard
+    name: split_odd
+    sink-table: pgcat_sidecar_a.orders_1
+    when: {field: tenant_id, modulus: 2, remainder: 1}
+  - name: split_detail
+    source-table: 'pgcat_sidecar_b\.orders'
+    sink-table: pgcat_sidecar_a.order_detail
+    source-key: [record_key]
+    primary-keys: [record_key]
+    columns:
+      record_key: {from: record_key}
+      order_id: {from: order_id}
+      note: {from: note}

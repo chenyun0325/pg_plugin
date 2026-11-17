@@ -26,12 +26,13 @@ CREATE TABLE IF NOT EXISTS _pgcat_yaml.row_state(job text NOT NULL,source_table 
 
 type columnTypes map[string]string
 type runtime struct {
-	ctx           context.Context
-	c             *Config
-	src, dst      *pgx.Conn
-	types         map[string]columnTypes
-	tables        []string
-	beforeAdvance func() error // tests inject a crash after target commit
+	ctx                     context.Context
+	c                       *Config
+	src, dst                *pgx.Conn
+	types                   map[string]columnTypes
+	tables                  []string
+	beforeAdvance           func() error // tests inject a crash after target commit
+	afterOutboxSourceCommit func() error // idempotent outbox crash injection
 }
 
 func (r *runtime) targetTypes(table string) (columnTypes, error) {
@@ -57,9 +58,11 @@ func (r *runtime) targetTypes(table string) (columnTypes, error) {
 	if len(t) == 0 {
 		return nil, fmt.Errorf("missing target table %s", table)
 	}
-	for _, col := range []string{"_sync_source", "_sync_table", "_sync_pk"} {
-		if t[col] == "" {
-			return nil, fmt.Errorf("target %s needs provenance column %s", table, col)
+	if !r.c.sidecar() {
+		for _, col := range []string{"_sync_source", "_sync_table", "_sync_pk"} {
+			if t[col] == "" {
+				return nil, fmt.Errorf("target %s needs provenance column %s", table, col)
+			}
 		}
 	}
 	r.types[table] = t
@@ -86,6 +89,9 @@ func whereKey(key Row, types columnTypes, start int) (string, []any, error) {
 	return strings.Join(terms, " AND "), args, nil
 }
 func (r *runtime) apply(tx pgx.Tx, m *Mutation) error {
+	if r.c.sidecar() {
+		return r.applySidecar(tx, m)
+	}
 	types, e := r.targetTypes(m.Route.Target)
 	if e != nil {
 		return e

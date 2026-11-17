@@ -1,0 +1,110 @@
+# Sanitized route/transform fixture; source, sink and pipeline credentials excluded.
+route:
+  - source-table: 'StoreServer.mem_customer_amaz_order,StoreServer.mem_customer_amaz_order_[0-9]+,StoreServer.mem_customer_amaz_order_history'
+    sink-table: store.mem_customer_amaz_order_m
+  - source-table: 'StoreServer.mem_customer_amaz_order_item,StoreServer.mem_customer_amaz_order_item_[0-9]+,StoreServer.mem_customer_amaz_order_item_history'
+    sink-table: store.mem_customer_amaz_order_item_m
+  - source-table: 'StoreServer.mem_customer_walmart_order,StoreServer.mem_customer_walmart_order_[0-9]+,StoreServer.mem_customer_walmart_order_history'
+    sink-table: store.mem_customer_walmart_order_m
+  - source-table: 'StoreServer.mem_customer_walmart_order_item,StoreServer.mem_customer_walmart_order_item_[0-9]+,StoreServer.mem_customer_walmart_order_item_history'
+    sink-table: store.mem_customer_walmart_order_item_m
+  - source-table: 'StoreServer.sys_warehouse_outbound,StoreServer.sys_warehouse_outbound_([0-9]+|[0-9]+_history),StoreServer.thd_warehouse_outbound,StoreServer.mem_supplier_warehouse_outbound'
+    sink-table: store.sys_warehouse_outbound_m
+  - source-table: 'StoreServer.sys_warehouse_outbound_tracking,StoreServer.sys_warehouse_outbound_tracking_([0-9]+|[0-9]+_history),StoreServer.thd_warehouse_outbound_tracking,StoreServer.mem_supplier_warehouse_outbound_tracking'
+    sink-table: store.sys_warehouse_outbound_tracking_m
+  - source-table: 'StoreServer.sys_warehouse_outbound_upload_file_record,StoreServer.sys_warehouse_outbound_upload_file_record_([0-9]+|[0-9]+_history),StoreServer.thd_warehouse_outbound_upload_file_record,StoreServer.mem_supplier_warehouse_outbound_upload_file_record'
+    sink-table: store.sys_warehouse_outbound_upload_file_record_m
+  - source-table: 'StoreServer.sys_warehouse_outbound_product,StoreServer.sys_warehouse_outbound_product_([0-9]+|[0-9]+_history),StoreServer.thd_warehouse_outbound_product,StoreServer.mem_supplier_warehouse_outbound_product'
+    sink-table: store.sys_warehouse_outbound_product_m
+  - source-table: 'StoreServer.sys_warehouse_outbound_sn_record,StoreServer.sys_warehouse_outbound_sn_record_history,StoreServer.sys_warehouse_outbound_sn_record_([0-9]+|[0-9]+_history),StoreServer.thd_warehouse_outbound_sn_record,StoreServer.mem_supplier_warehouse_outbound_sn_record,StoreServer.mem_supplier_warehouse_outbound_sn_record_history'
+    sink-table: store.sys_warehouse_outbound_sn_record_m
+  - source-table: 'StoreServer.sys_warehouse_outbound_product_bo_sn,StoreServer.sys_warehouse_outbound_product_bo_sn_([0-9]+|[0-9]+_history),StoreServer.thd_warehouse_outbound_product_bo_sn'
+    sink-table: store.sys_warehouse_outbound_product_bo_sn_m
+  - source-table: StoreServer.mem_customer_amaz_order_item_gift
+    sink-table: store.mem_customer_amaz_order_item_gift
+  - source-table: StoreServer.mem_customer_amaz_shop
+    sink-table: store.mem_customer_amaz_shop
+  - source-table: StoreServer.mem_customer_amaz_order_tracking
+    sink-table: store.mem_customer_amaz_order_tracking
+  - source-table: StoreServer.mem_customer_walmart_order_item_gift
+    sink-table: store.mem_customer_walmart_order_item_gift
+  - source-table: StoreServer.mem_customer_walmart_shop
+    sink-table: store.mem_customer_walmart_shop
+  - source-table: StoreServer.mem_customer_ship_station_order
+    sink-table: store.mem_customer_ship_station_order
+  - source-table: StoreServer.mem_customer_ship_station_order_item
+    sink-table: store.mem_customer_ship_station_order_item
+  - source-table: StoreServer.mem_customer_ship_station_order_item_gift
+    sink-table: store.mem_customer_ship_station_order_item_gift
+  - source-table: StoreServer.mem_customer_ship_station_shop
+    sink-table: store.mem_customer_ship_station_shop
+  - source-table: StoreServer.mem_customer_best_buy_order
+    sink-table: store.mem_customer_best_buy_order
+  - source-table: StoreServer.mem_customer_best_buy_order_item
+    sink-table: store.mem_customer_best_buy_order_item
+  - source-table: StoreServer.mem_customer_best_buy_order_item_gift
+    sink-table: store.mem_customer_best_buy_order_item_gift
+  - source-table: StoreServer.mem_customer_best_buy_shop
+    sink-table: store.mem_customer_best_buy_shop
+  - source-table: StoreServer.mem_customer_market_order_address_info
+    sink-table: store.mem_customer_market_order_address_info
+  - source-table: StoreServer.mem_customer_market_order_item
+    sink-table: store.mem_customer_market_order_item
+  - source-table: StoreServer.mem_customer_data
+    sink-table: store.mem_customer_data
+  - source-table: StoreServer.mem_customer_product
+    sink-table: store.mem_customer_product
+  - source-table: StoreServer.mem_customer_product_upc_code
+    sink-table: store.mem_customer_product_upc_code
+  - source-table: StoreServer.sys_product
+    sink-table: store.sys_product
+  - source-table: StoreServer.mem_ups_capital
+    sink-table: store.mem_ups_capital
+  - source-table: StoreServer.mem_customer_tracking
+    sink-table: store.mem_customer_tracking
+  - source-table: StoreServer.hot_warehouse_outbound
+    sink-table: store.hot_warehouse_outbound
+  - source-table: StoreServer.hot_warehouse_outbound_product
+    sink-table: store.hot_warehouse_outbound_product
+  - source-table: StoreServer.hot_warehouse_outbound_sn_record
+    sink-table: store.hot_warehouse_outbound_sn_record
+
+transform:
+  - source-table: StoreServer.mem_customer_tracking
+    projection: "*, json_int(param, 'outbound_id') AS outbound_id"
+  - source-table: 'StoreServer.mem_customer_amaz_order,StoreServer.mem_customer_amaz_order_[0-9]+,StoreServer.mem_customer_amaz_order_history'
+    projection: "*, __table_name__ || '_' || id AS _pk_id"
+    primary-keys: _pk_id
+  - source-table: 'StoreServer.mem_customer_amaz_order_item,StoreServer.mem_customer_amaz_order_item_[0-9]+,StoreServer.mem_customer_amaz_order_item_history'
+    projection: "*, __table_name__ || '_' || id AS _pk_id"
+    primary-keys: _pk_id
+  - source-table: 'StoreServer.mem_customer_walmart_order,StoreServer.mem_customer_walmart_order_[0-9]+,StoreServer.mem_customer_walmart_order_history'
+    projection: "*, __table_name__ || '_' || id AS _pk_id"
+    primary-keys: _pk_id
+  - source-table: 'StoreServer.mem_customer_walmart_order_item,StoreServer.mem_customer_walmart_order_item_[0-9]+,StoreServer.mem_customer_walmart_order_item_history'
+    projection: "*, __table_name__ || '_' || id AS _pk_id"
+    primary-keys: _pk_id
+  - source-table: 'StoreServer.sys_warehouse_outbound,StoreServer.sys_warehouse_outbound_([0-9]+|[0-9]+_history)'
+    projection: "*, 1 AS wh_type, __table_name__ || '_' || outbound_id AS _pk_id"
+    primary-keys: _pk_id
+  - source-table: StoreServer.mem_supplier_warehouse_outbound
+    projection: "*, 2 AS wh_type, __table_name__ || '_' || outbound_id AS _pk_id"
+    primary-keys: _pk_id
+  - source-table: StoreServer.thd_warehouse_outbound
+    projection: "*, 3 AS wh_type, __table_name__ || '_' || outbound_id AS _pk_id"
+    primary-keys: _pk_id
+  - source-table: 'StoreServer.sys_warehouse_outbound_tracking,StoreServer.sys_warehouse_outbound_tracking_([0-9]+|[0-9]+_history),StoreServer.thd_warehouse_outbound_tracking,StoreServer.mem_supplier_warehouse_outbound_tracking'
+    projection: "*, __table_name__ || '_' || outbound_id AS _pk_id"
+    primary-keys: _pk_id,tracking_number,delete
+  - source-table: 'StoreServer.sys_warehouse_outbound_upload_file_record,StoreServer.sys_warehouse_outbound_upload_file_record_([0-9]+|[0-9]+_history),StoreServer.thd_warehouse_outbound_upload_file_record,StoreServer.mem_supplier_warehouse_outbound_upload_file_record'
+    projection: "*, __table_name__ || '_' || id AS _pk_id"
+    primary-keys: _pk_id
+  - source-table: 'StoreServer.sys_warehouse_outbound_product,StoreServer.sys_warehouse_outbound_product_([0-9]+|[0-9]+_history),StoreServer.thd_warehouse_outbound_product,StoreServer.mem_supplier_warehouse_outbound_product'
+    projection: "*, __table_name__ || '_' || outbound_id AS _pk_id"
+    primary-keys: _pk_id,upc
+  - source-table: 'StoreServer.sys_warehouse_outbound_sn_record,StoreServer.sys_warehouse_outbound_sn_record_history,StoreServer.sys_warehouse_outbound_sn_record_([0-9]+|[0-9]+_history),StoreServer.thd_warehouse_outbound_sn_record,StoreServer.mem_supplier_warehouse_outbound_sn_record,StoreServer.mem_supplier_warehouse_outbound_sn_record_history'
+    projection: "*, __table_name__ || '_' || id AS _pk_id"
+    primary-keys: _pk_id
+  - source-table: 'StoreServer.sys_warehouse_outbound_product_bo_sn,StoreServer.sys_warehouse_outbound_product_bo_sn_([0-9]+|[0-9]+_history),StoreServer.thd_warehouse_outbound_product_bo_sn'
+    projection: "*, __table_name__ || '_' || outbound_id AS _pk_id"
+    primary-keys: _pk_id,upc,bo_sn

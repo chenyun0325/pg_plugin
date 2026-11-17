@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/jackc/pglogrepl"
@@ -89,6 +90,12 @@ func openRuntime(ctx context.Context, c *Config) (*runtime, error) {
 			r.close()
 			return nil, e
 		}
+		if c.sidecar() {
+			if e = r.validateTargetKeys(&route); e != nil {
+				r.close()
+				return nil, e
+			}
+		}
 	}
 	return r, nil
 }
@@ -121,7 +128,25 @@ func (r *runtime) close() {
 	}
 }
 func (r *runtime) prepare() error {
-	if _, e := r.dst.Exec(r.ctx, metadataDDL); e != nil {
+	if r.c.sidecar() {
+		if e := ensureIdentitySchema(r.ctx, r.src); e != nil {
+			return e
+		}
+		if e := ensureIdentitySchema(r.ctx, r.dst); e != nil {
+			return e
+		}
+		for _, table := range r.tables {
+			keys, _ := r.c.sourceKey(table)
+			if e := r.registerKeys(r.src, r.c.Source.ID, table, keys); e != nil {
+				return e
+			}
+		}
+		for _, route := range r.c.Routes {
+			if e := r.registerKeys(r.dst, r.c.Sink.ID, route.Target, route.Keys); e != nil {
+				return e
+			}
+		}
+	} else if _, e := r.dst.Exec(r.ctx, metadataDDL); e != nil {
 		return e
 	}
 	var exists bool
@@ -191,11 +216,19 @@ func (r *runtime) init(recreate bool) error {
 	if _, e = snap.Exec(r.ctx, "SET TRANSACTION SNAPSHOT '"+strings.ReplaceAll(slot.SnapshotName, "'", "''")+"'"); e != nil {
 		return e
 	}
+	var bindings map[string]binding
+	if r.c.sidecar() {
+		bindings, e = r.loadBindings(snap)
+		if e != nil {
+			return e
+		}
+	}
 	tx, e := r.dst.Begin(r.ctx)
 	if e != nil {
 		return e
 	}
 	defer tx.Rollback(context.Background())
+	identityIndex := 0
 	for _, table := range r.tables {
 		keys, _ := r.c.sourceKey(table)
 		rows, err := snap.Query(r.ctx, "SELECT to_jsonb(t)::text FROM "+qTable(table)+" t")
@@ -224,9 +257,35 @@ func (r *runtime) init(recreate bool) error {
 				rows.Close()
 				return err
 			}
+			var identity *RecordIdentity
+			if r.c.sidecar() {
+				bound, ok := bindings[table+"\x00"+pk]
+				if ok && bound.Alive {
+					copy := bound.Identity
+					identity = &copy
+				} else {
+					if r.c.Identity.Bootstrap == "require-binding" || ok {
+						rows.Close()
+						return fmt.Errorf("snapshot row %s key=%s has no live binding; reconcile or explicitly bootstrap local original data", table, pk)
+					}
+					identity = newIdentity(r.c.Identity.Namespace, r.c.Source.ID, table, pk, "snapshot:"+slot.ConsistentPoint)
+				}
+				if err = r.putIdentityState(tx, table, pk, identity); err != nil {
+					rows.Close()
+					return err
+				}
+				if err = r.queueSourceBinding(tx, slot.ConsistentPoint, identityIndex, table, pk, identity, true); err != nil {
+					rows.Close()
+					return err
+				}
+				identityIndex++
+			}
 			owned := row["_sync_source"] == nil || fmt.Sprint(row["_sync_source"]) == r.c.Source.ID
+			if r.c.sidecar() {
+				owned = identity.Owner.Source == r.c.Source.ID
+			}
 			if r.c.Source.Snapshot == "copy" && owned {
-				plan, err := r.c.plan(table, nil, row)
+				plan, err := r.c.planIdentity(table, nil, row, identity)
 				if err != nil {
 					rows.Close()
 					return err
@@ -260,6 +319,9 @@ func (r *runtime) init(recreate bool) error {
 		return e
 	}
 	log.Printf("initialized job=%s consistent_lsn=%s", r.c.Job, slot.ConsistentPoint)
+	if r.c.sidecar() {
+		return r.flushIdentityOutbox()
+	}
 	return nil
 }
 
@@ -267,6 +329,7 @@ type wireChange struct {
 	rel      *pglogrepl.RelationMessage
 	old, new *pglogrepl.TupleData
 	kind     byte
+	identity *RecordIdentity
 }
 
 func tupleRow(rel *pglogrepl.RelationMessage, t *pglogrepl.TupleData) (Row, error) {
@@ -301,7 +364,8 @@ func (r *runtime) commit(changes []wireChange, end pglogrepl.LSN, origin string)
 		return e
 	}
 	defer tx.Rollback(context.Background())
-	for _, ch := range changes {
+	identityIndex := 0
+	for ordinal, ch := range changes {
 		table := ch.rel.Namespace + "." + ch.rel.RelationName
 		keys, e := r.c.sourceKey(table)
 		if e != nil {
@@ -316,6 +380,7 @@ func (r *runtime) commit(changes []wireChange, end pglogrepl.LSN, origin string)
 			return e
 		}
 		var before, after Row
+		var identity *RecordIdentity
 		var oldPK string
 		if ch.kind != 'I' {
 			if old == nil {
@@ -330,6 +395,12 @@ func (r *runtime) commit(changes []wireChange, end pglogrepl.LSN, origin string)
 				return err
 			}
 			before = merge(saved, old)
+			if r.c.sidecar() {
+				identity, e = r.getIdentityState(tx, table, oldPK)
+				if e != nil {
+					return fmt.Errorf("missing historical identity for %s key=%s: %w", table, oldPK, e)
+				}
+			}
 		}
 		if ch.kind != 'D' {
 			after = merge(before, new)
@@ -339,8 +410,30 @@ func (r *runtime) commit(changes []wireChange, end pglogrepl.LSN, origin string)
 				}
 			}
 		}
+		if r.c.sidecar() {
+			if origin != "" {
+				if ch.identity == nil {
+					return fmt.Errorf("remote-origin business DML lacks matching transactional identity message: %s", table)
+				}
+				if identity != nil && !sameIdentity(identity, ch.identity) {
+					return fmt.Errorf("remote identity does not match captured old record at %s", table)
+				}
+				identity = ch.identity
+			} else {
+				if ch.identity != nil {
+					return fmt.Errorf("identity message on an unmarked local transaction")
+				}
+				if ch.kind == 'I' {
+					pk, err := rowKey(after, keys)
+					if err != nil {
+						return err
+					}
+					identity = newIdentity(r.c.Identity.Namespace, r.c.Source.ID, table, pk, fmt.Sprintf("wal:%s:%d", end.String(), ordinal))
+				}
+			}
+		}
 		if origin == "" {
-			plan, err := r.c.plan(table, before, after)
+			plan, err := r.c.planIdentity(table, before, after, identity)
 			if err != nil {
 				return err
 			}
@@ -354,6 +447,15 @@ func (r *runtime) commit(changes []wireChange, end pglogrepl.LSN, origin string)
 			if _, e = tx.Exec(r.ctx, `DELETE FROM _pgcat_yaml.row_state WHERE job=$1 AND source_table=$2 AND pk=$3`, r.c.Job, table, oldPK); e != nil {
 				return e
 			}
+			if r.c.sidecar() {
+				if _, e = tx.Exec(r.ctx, `DELETE FROM _pgcat_yaml.identity_state WHERE job=$1 AND source_table=$2 AND pk=$3`, r.c.Job, table, oldPK); e != nil {
+					return e
+				}
+				if e = r.queueSourceBinding(tx, end.String(), identityIndex, table, oldPK, identity, false); e != nil {
+					return e
+				}
+				identityIndex++
+			}
 		}
 		if after != nil {
 			pk, err := rowKey(after, keys)
@@ -362,6 +464,15 @@ func (r *runtime) commit(changes []wireChange, end pglogrepl.LSN, origin string)
 			}
 			if err = r.putState(tx, table, pk, after); err != nil {
 				return err
+			}
+			if r.c.sidecar() {
+				if err = r.putIdentityState(tx, table, pk, identity); err != nil {
+					return err
+				}
+				if err = r.queueSourceBinding(tx, end.String(), identityIndex, table, pk, identity, true); err != nil {
+					return err
+				}
+				identityIndex++
 			}
 		}
 	}
@@ -402,6 +513,12 @@ func (r *runtime) poll() (bool, error) {
 	if cp > pos {
 		return false, fmt.Errorf("source slot ahead of target checkpoint; possible target restore: resnapshot required")
 	}
+	// Validate the saved configuration and slot before any source metadata write.
+	if r.c.sidecar() {
+		if e = r.flushIdentityOutbox(); e != nil {
+			return false, e
+		}
+	}
 	args := []any{r.c.Source.Slot, "proto_version", "1", "publication_names", r.c.Source.Publication}
 	sql := `SELECT data FROM pg_logical_slot_peek_binary_changes($1,NULL,1000,$2,$3,$4,$5)`
 	// Read remote-origin images to maintain the row-state ledger, but never forward
@@ -409,6 +526,10 @@ func (r *runtime) poll() (bool, error) {
 	if plugin == "pgoutput" {
 		sql = `SELECT data FROM pg_logical_slot_peek_binary_changes($1,NULL,1000,$2,$3,$4,$5,$6,$7)`
 		args = append(args, "origin", "any")
+	}
+	if r.c.sidecar() {
+		sql = `SELECT data FROM pg_logical_slot_peek_binary_changes($1,NULL,1000,$2,$3,$4,$5,$6,$7,$8,$9)`
+		args = append(args, "messages", "true")
 	}
 	rows, e := r.src.Query(r.ctx, sql, args...)
 	if e != nil {
@@ -447,6 +568,23 @@ func (r *runtime) poll() (bool, error) {
 			changes = nil
 		case *pglogrepl.OriginMessage:
 			origin = m.Name
+		case *pglogrepl.LogicalDecodingMessage:
+			if !r.c.sidecar() || m.Prefix != identityPrefix {
+				continue
+			}
+			if !m.Transactional || !inTx || len(m.Content) > identityMessageLimit {
+				return false, fmt.Errorf("invalid transactional identity message")
+			}
+			var event IdentityEvent
+			if err = json.Unmarshal(m.Content, &event); err != nil {
+				return false, err
+			}
+			if event.Namespace != r.c.Identity.Namespace || event.Node != r.c.Source.ID || len(r.c.routes(event.Table)) == 0 {
+				continue
+			}
+			if err = matchIdentityEvent(r.c, changes, event); err != nil {
+				return false, err
+			}
 		case *pglogrepl.InsertMessage:
 			rel := relations[m.RelationID]
 			if rel == nil {
@@ -483,6 +621,11 @@ func (r *runtime) poll() (bool, error) {
 	}
 	if inTx {
 		return false, fmt.Errorf("decoder returned incomplete transaction; no slot advancement")
+	}
+	if r.c.sidecar() {
+		if e = r.flushIdentityOutbox(); e != nil {
+			return false, e
+		}
 	}
 	if last > cp {
 		if r.beforeAdvance != nil {

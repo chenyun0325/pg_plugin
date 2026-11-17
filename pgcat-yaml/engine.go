@@ -9,12 +9,13 @@ import (
 
 type Owner struct{ Source, Table, PK string }
 type Mutation struct {
-	Route   *Route
-	Values  Row
-	Key     Row
-	Owner   Owner
-	Delete  bool
-	Patches map[string][]patchValue
+	Route    *Route
+	Values   Row
+	Key      Row
+	Owner    Owner
+	Identity *RecordIdentity
+	Delete   bool
+	Patches  map[string][]patchValue
 }
 type patchValue struct {
 	Path  []string
@@ -22,6 +23,9 @@ type patchValue struct {
 }
 
 func (c *Config) project(r *Route, table string, row Row) (*Mutation, error) {
+	return c.projectIdentity(r, table, row, nil)
+}
+func (c *Config) projectIdentity(r *Route, table string, row Row, identity *RecordIdentity) (*Mutation, error) {
 	if row == nil {
 		return nil, nil
 	}
@@ -49,7 +53,12 @@ func (c *Config) project(r *Route, table string, row Row) (*Mutation, error) {
 		return nil, e
 	}
 	owner := Owner{c.Source.ID, table, pk}
-	if row["_sync_source"] != nil && fmt.Sprint(row["_sync_source"]) != "" {
+	if c.sidecar() {
+		if identity == nil {
+			return nil, fmt.Errorf("sidecar planning needs a resolved record identity")
+		}
+		owner = identity.Owner
+	} else if row["_sync_source"] != nil && fmt.Sprint(row["_sync_source"]) != "" {
 		for _, k := range []string{"_sync_table", "_sync_pk"} {
 			if row[k] == nil || fmt.Sprint(row[k]) == "" {
 				return nil, fmt.Errorf("incomplete provenance")
@@ -59,9 +68,15 @@ func (c *Config) project(r *Route, table string, row Row) (*Mutation, error) {
 	}
 	parts := strings.SplitN(table, ".", 2)
 	meta := Row{"__table_name__": parts[1], "__schema_name__": parts[0], "__source_id__": c.Source.ID, "__owner_source__": owner.Source, "__owner_table__": owner.Table, "__owner_pk__": owner.PK}
+	if identity != nil {
+		meta["__entity_id__"] = identity.EntityID
+	}
 	out := Row{}
 	if r.IncludeAll {
 		for k, v := range row {
+			if c.sidecar() && strings.HasPrefix(k, "_sync_") {
+				continue
+			}
 			out[k] = v
 		}
 	}
@@ -75,9 +90,11 @@ func (c *Config) project(r *Route, table string, row Row) (*Mutation, error) {
 		}
 		out[k] = v
 	}
-	out["_sync_source"] = owner.Source
-	out["_sync_table"] = owner.Table
-	out["_sync_pk"] = owner.PK
+	if !c.sidecar() {
+		out["_sync_source"] = owner.Source
+		out["_sync_table"] = owner.Table
+		out["_sync_pk"] = owner.PK
+	}
 	key := Row{}
 	for _, k := range r.Keys {
 		v, ok := out[k]
@@ -86,7 +103,7 @@ func (c *Config) project(r *Route, table string, row Row) (*Mutation, error) {
 		}
 		key[k] = v
 	}
-	m := &Mutation{Route: r, Values: out, Key: key, Owner: owner, Patches: map[string][]patchValue{}}
+	m := &Mutation{Route: r, Values: out, Key: key, Owner: owner, Identity: identity, Patches: map[string][]patchValue{}}
 	for col, patches := range r.JSONPatches {
 		for _, p := range patches {
 			v, err := eval(p.Value, row, meta)
@@ -100,6 +117,9 @@ func (c *Config) project(r *Route, table string, row Row) (*Mutation, error) {
 }
 func mutationID(m *Mutation) string { b, _ := json.Marshal(m.Key); return m.Route.Target + string(b) }
 func (c *Config) plan(table string, before, after Row) ([]*Mutation, error) {
+	return c.planIdentity(table, before, after, nil)
+}
+func (c *Config) planIdentity(table string, before, after Row, identity *RecordIdentity) ([]*Mutation, error) {
 	old, new := map[string]*Mutation{}, map[string]*Mutation{}
 	rs := c.routes(table)
 	if len(rs) == 0 {
@@ -107,7 +127,7 @@ func (c *Config) plan(table string, before, after Row) ([]*Mutation, error) {
 	}
 	for _, r := range rs {
 		for i, row := range []Row{before, after} {
-			m, e := c.project(r, table, row)
+			m, e := c.projectIdentity(r, table, row, identity)
 			if e != nil {
 				return nil, e
 			}

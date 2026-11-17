@@ -28,11 +28,15 @@ func entry() error {
 	reset := fs.Bool("recreate-slot", false, "explicitly recreate an uninitialized existing slot")
 	input := fs.String("input", "", "Flink YAML")
 	output := fs.String("output", "", "generated pgcat YAML")
+	mode := fs.String("identity-mode", "columns", "columns or sidecar for conversion")
+	namespace := fs.String("namespace", "", "stable shared identity namespace for sidecar conversion")
+	sinkID := fs.String("sink-id", "", "stable target node ID for sidecar conversion")
+	targetKeys := fs.String("target-keys", "", "YAML map of target table names to actual unique business key columns")
 	if e := fs.Parse(os.Args[2:]); e != nil {
 		return e
 	}
 	if cmd == "convert-wms" {
-		return convertWMS(*input, *output)
+		return convertWMSOptions(*input, *output, conversionOptions{*mode, *namespace, *sinkID, *targetKeys})
 	}
 	c, e := loadConfig(*path)
 	if e != nil {
