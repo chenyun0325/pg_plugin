@@ -1,0 +1,53 @@
+api-version: pgflo/v1
+kind: ReplicationJob
+metadata: {name: target-to-source-demo}
+
+source:
+  type: postgres
+  id: target-demo
+  host: 127.0.0.1
+  port: 55433
+  database: target_db
+  user: postgres
+  password: "${PGFLO_TARGET_PASSWORD:-postgres}"
+  schema: legacy
+  tables: [orders_0, orders_1]
+  group: target_to_source_demo
+  mode: stream
+  filter-replication-origins: true
+
+nats: {url: 'nats://127.0.0.1:4222', max-age: 0s, replicas: 1}
+
+sink:
+  type: postgres
+  host: 127.0.0.1
+  port: 55432
+  database: source_db
+  user: postgres
+  password: "${PGFLO_SOURCE_PASSWORD:-postgres}"
+  replication-origin: pgflo_from_target_demo
+
+worker: {batch-size: 100, flush-interval: 200ms, max-deliver: 20}
+
+mapping:
+  version: v1
+  source-id: target-demo
+  unmatched: error
+  loop-protection: true
+  routes:
+    - id: shards-back-to-orders
+      mode: merge
+      source-patterns: ['^legacy\.orders_[01]$']
+      target: public.orders
+      # Business-key merge is explicit here. Horizontal shards must guarantee
+      # that an order_id is owned by exactly one shard.
+      identity:
+        strategy: mapped
+        target-key: [id]
+        # Safe only because the horizontal-shard contract has one owner per id.
+        delete-policy: delete
+      conflict: upsert
+      columns:
+        id: {source: order_id}
+        tenant_id: {source: tenant_id}
+        payload: {source: payload}

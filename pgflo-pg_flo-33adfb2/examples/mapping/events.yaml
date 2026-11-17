@@ -1,0 +1,53 @@
+events:
+  - transaction-id: preview-insert
+    lsn: 0/10
+    operation: INSERT
+    schema: public
+    table: orders
+    key-columns: [id]
+    after:
+      id: 9007199254740993
+      tenant_id: 2
+      payload: '{"customer":{"name":"Alice"},"note":"created","outbound_id":7001}'
+
+  - transaction-id: preview-move
+    lsn: 0/20
+    operation: UPDATE
+    schema: public
+    table: orders
+    key-columns: [id]
+    before:
+      id: 9007199254740993
+      tenant_id: 2
+      payload: '{"customer":{"name":"Alice"},"note":"created","outbound_id":7001}'
+    after:
+      id: 9007199254740993
+      tenant_id: 3
+      payload: '{"customer":{"name":"Bob"},"note":"moved","outbound_id":7002}'
+
+  - transaction-id: preview-delete
+    lsn: 0/30
+    operation: DELETE
+    schema: public
+    table: orders
+    key-columns: [id]
+    before:
+      id: 9007199254740993
+      tenant_id: 3
+      payload: '{"customer":{"name":"Bob"},"note":"moved","outbound_id":7002}'
+
+  - transaction-id: preview-merge-a
+    lsn: 0/40
+    operation: INSERT
+    schema: public
+    table: legacy_orders_0
+    key-columns: [id]
+    after: {id: 1, tenant_id: 8, customer_name: Legacy-A, amount: 12.50}
+
+  - transaction-id: preview-merge-b
+    lsn: 0/50
+    operation: INSERT
+    schema: public
+    table: legacy_orders_1
+    key-columns: [id]
+    after: {id: 1, tenant_id: 9, customer_name: Legacy-B, amount: 99.00}

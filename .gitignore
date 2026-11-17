@@ -1,0 +1,7 @@
+tmp/
+reference/*.zip
+tools/postgresql18/
+pgcat-yaml/bin/
+/env.txt
+/job-yaml/
+output/**/bin/

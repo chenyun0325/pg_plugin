@@ -1,0 +1,55 @@
+version: 1
+job: demo_a_to_b_v1
+source:
+  id: legacy
+  dsn-env: PGCAT_A_DSN
+  publication: pgcat_demo_a_pub
+  slot: pgcat_demo_a_v1
+  plugin: pgoutput
+  snapshot: copy
+sink:
+  dsn-env: PGCAT_B_DSN
+  origin: pgcat_demo_from_a
+route:
+  - name: merge_orders
+    source-table: 'pgcat_demo_a\.orders_[01]'
+    sink-table: pgcat_demo_b.orders
+    source-key: [id]
+    primary-keys: [record_key]
+    adopt-unmarked-source: new_app
+    columns:
+      record_key:
+        function: if_eq
+        args:
+          - {from: __owner_table__}
+          - {literal: pgcat_demo_b.orders}
+          - function: json_index
+            args: [{from: __owner_pk__}, {literal: 0}]
+          - function: concat
+            args: [{from: __owner_table__}, {literal: ':'}, {from: __owner_pk__}]
+      order_id: {from: id}
+      tenant_id: {from: tenant_id}
+      customer_name:
+        function: json_get
+        args: [{from: param}, {literal: customer}, {literal: name}]
+      outbound_id:
+        function: json_int
+        args: [{from: param}, {literal: outbound_id}]
+      note:
+        function: json_get
+        args: [{from: param}, {literal: note}]
+      payload: {from: param}
+  - name: detail_back_to_aggregate
+    source-table: 'pgcat_demo_a\.order_detail'
+    sink-table: pgcat_demo_b.orders
+    source-key: [record_key]
+    primary-keys: [record_key]
+    require-existing: true
+    on-delete: patch-null
+    columns:
+      record_key: {from: record_key}
+      note: {from: note}
+    json-patches:
+      payload:
+        - path: [note]
+          value: {from: note}

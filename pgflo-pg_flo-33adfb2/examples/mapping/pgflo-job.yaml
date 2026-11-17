@@ -1,0 +1,125 @@
+api-version: pgflo/v1
+kind: ReplicationJob
+
+metadata:
+  name: source-to-target-demo
+
+source:
+  type: postgres
+  id: source-demo
+  host: 127.0.0.1
+  port: 55432
+  database: source_db
+  user: postgres
+  password: "${PGFLO_SOURCE_PASSWORD:-postgres}"
+  schema: public
+  tables: [orders, legacy_orders_0, legacy_orders_1]
+  group: source_to_target_demo
+  mode: copy-and-stream
+  max-copy-workers: 2
+  track-ddl: false
+  filter-replication-origins: true
+
+nats:
+  url: nats://127.0.0.1:4222
+  # 0s means no time-based expiry. Production still needs disk/lag alerts.
+  max-age: 0s
+  replicas: 1
+
+sink:
+  type: postgres
+  host: 127.0.0.1
+  port: 55433
+  database: target_db
+  user: postgres
+  password: "${PGFLO_TARGET_PASSWORD:-postgres}"
+  replication-origin: pgflo_from_source_demo
+  disable-foreign-keys: false
+
+worker:
+  batch-size: 200
+  flush-interval: 200ms
+  max-deliver: 20
+
+mapping:
+  version: v1
+  source-id: source-demo
+  unmatched: error
+  loop-protection: true
+  routes:
+    # 1:N horizontal split, even tenants.
+    - id: orders-even
+      mode: horizontal
+      sources: [public.orders]
+      target: legacy.orders_0
+      when:
+        modulo: {column: tenant_id, divisor: 2, remainder: 0}
+      identity:
+        strategy: source
+        source-key: [id]
+      conflict: upsert
+      columns:
+        order_id: {source: id}
+        tenant_id: {source: tenant_id}
+        payload: {source: payload}
+        customer_name:
+          source: payload
+          transforms:
+            - {function: json_get, args: [customer, name]}
+
+    # 1:N horizontal split, odd tenants. before/after route diff moves rows.
+    - id: orders-odd
+      mode: horizontal
+      sources: [public.orders]
+      target: legacy.orders_1
+      when:
+        modulo: {column: tenant_id, divisor: 2, remainder: 1}
+      identity:
+        strategy: source
+        source-key: [id]
+      conflict: upsert
+      columns:
+        order_id: {source: id}
+        tenant_id: {source: tenant_id}
+        payload: {source: payload}
+        customer_name:
+          source: payload
+          transforms:
+            - {function: json_get, args: [customer, name]}
+
+    # The same input row also writes a vertical detail projection.
+    - id: order-detail
+      mode: vertical
+      sources: [public.orders]
+      target: app.order_detail
+      identity:
+        strategy: source
+        source-key: [id]
+      conflict: upsert
+      columns:
+        order_id: {source: id}
+        note:
+          source: payload
+          transforms:
+            - {function: json_get, args: [note]}
+        outbound_id:
+          source: payload
+          transforms:
+            - {function: json_get, args: [outbound_id]}
+            - {function: to_int64}
+
+    # N:1 merge. Source table is part of the target identity, so id=1 from
+    # legacy_orders_0 and legacy_orders_1 cannot overwrite each other.
+    - id: merge-legacy-orders
+      mode: merge
+      source-patterns: ['^public\.legacy_orders_[0-9]+$']
+      target: app.all_legacy_orders
+      identity:
+        strategy: source
+        source-key: [id]
+      conflict: upsert
+      columns:
+        order_id: {source: id}
+        tenant_id: {source: tenant_id}
+        customer_name: {source: customer_name}
+        amount: {source: amount}

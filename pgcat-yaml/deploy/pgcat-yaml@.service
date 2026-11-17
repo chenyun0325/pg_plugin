@@ -1,0 +1,21 @@
+[Unit]
+Description=pgcat YAML job %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pgcat
+Group=pgcat
+EnvironmentFile=/etc/pgcat-yaml/%i.env
+ExecStart=/opt/pgcat-yaml/pgcat-yaml run --config /etc/pgcat-yaml/%i.yaml
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

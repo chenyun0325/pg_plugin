@@ -1,0 +1,51 @@
+# [Replicator] PostgreSQL connection settings
+host: "localhost" # PostgreSQL host (env: PG_FLO_HOST)
+port: 5432 # PostgreSQL port (env: PG_FLO_PORT)
+dbname: "your_database" # PostgreSQL database name (env: PG_FLO_DBNAME)
+user: "your_user" # PostgreSQL user (env: PG_FLO_USER)
+password: "your_password" # PostgreSQL password (env: PG_FLO_PASSWORD)
+schema: "public" # PostgreSQL schema to replicate from (env: PG_FLO_SCHEMA)
+
+# Replication settings
+group: "your_group" # Group name to identify each replication (env: PG_FLO_GROUP)
+tables: # Tables to replicate (empty for all tables) (env: PG_FLO_TABLES)
+  - "table1"
+  - "table2"
+copy-and-stream: false # Enable copy and stream mode (env: PG_FLO_COPY_AND_STREAM)
+max-copy-workers-per-table: 4 # Maximum number of parallel workers for copy operation (env: PG_FLO_MAX_COPY_WORKERS_PER_TABLE)
+track-ddl: false # Enable tracking of DDL changes (env: PG_FLO_TRACK_DDL)
+
+# Connection retry settings
+retry-max-attempts: 3 # Maximum number of retry attempts for connection errors (env: PG_FLO_RETRY_MAX_ATTEMPTS)
+retry-initial-wait: "1s" # Initial wait time between retry attempts (env: PG_FLO_RETRY_INITIAL_WAIT)
+retry-max-wait: "8s" # Maximum wait time between retry attempts (env: PG_FLO_RETRY_MAX_WAIT)
+
+# NATS settings
+nats-url: "nats://localhost:4222" # NATS server URL (env: PG_FLO_NATS_URL)
+
+# Worker settings
+batch-size: 1000 # Number of messages to process in a batch (env: PG_FLO_BATCH_SIZE)
+rules-config: "/path/to/rules.yaml" # Path to rules configuration file (env: PG_FLO_RULES_CONFIG)
+routing-config: "/path/to/routing.yaml" # Path to routing configuration file (env: PG_FLO_ROUTING_CONFIG)
+
+# File sink settings
+file-output-dir: "/tmp/pg_flo-output" # Output directory for file sink (env: PG_FLO_FILE_OUTPUT_DIR)
+
+# [Worker] Postgres sink settings
+target-host: "" # Target PostgreSQL host (env: PG_FLO_TARGET_HOST)
+target-port: 5432 # Target PostgreSQL port (env: PG_FLO_TARGET_PORT)
+target-dbname: "" # Target PostgreSQL database name (env: PG_FLO_TARGET_DBNAME)
+target-user: "" # Target PostgreSQL user (env: PG_FLO_TARGET_USER)
+target-password: "" # Target PostgreSQL password (env: PG_FLO_TARGET_PASSWORD)
+target-sync-schema: false # Sync schema from source to target (env: PG_FLO_TARGET_SYNC_SCHEMA)
+target-disable-foreign-keys: false # Disable foreign key constraints on target (env: PG_FLO_TARGET_DISABLE_FOREIGN_KEYS)
+
+# Source connection for schema sync (only needed with target-sync-schema: true)
+source-host: "" # Source PostgreSQL host (env: PG_FLO_SOURCE_HOST)
+source-port: 5432 # Source PostgreSQL port (env: PG_FLO_SOURCE_PORT)
+source-dbname: "" # Source PostgreSQL database name (env: PG_FLO_SOURCE_DBNAME)
+source-user: "" # Source PostgreSQL user (env: PG_FLO_SOURCE_USER)
+source-password: "" # Source PostgreSQL password (env: PG_FLO_SOURCE_PASSWORD)
+
+# Webhook sink settings
+webhook-url: "" # Webhook URL to send data (env: PG_FLO_WEBHOOK_URL)

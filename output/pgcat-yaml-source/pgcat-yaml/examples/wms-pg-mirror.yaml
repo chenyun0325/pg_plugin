@@ -1,0 +1,1314 @@
+# Generated from Flink routes/transforms only. No credentials copied.
+# Connect to PostgreSQL mirror tables, NOT to MySQL. Review source-key and target DDL against real schemas before init.
+# Source schema StoreServer is case-sensitive: create/quote it correctly in PostgreSQL.
+version: 1
+job: wms_merge_v1
+source:
+    id: wms_legacy_pg
+    dsn-env: PGCAT_SOURCE_DSN
+    publication: pgcat_wms_pub
+    slot: pgcat_wms_v1
+    plugin: pgoutput
+    snapshot: copy
+sink:
+    dsn-env: PGCAT_TARGET_DSN
+    origin: pgcat_wms_from_legacy
+route:
+    - name: wms_001
+      source-table: StoreServer.mem_customer_amaz_order
+      sink-table: store.mem_customer_amaz_order_m
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+      when: null
+      json-patches: {}
+    - name: wms_002
+      source-table: StoreServer.mem_customer_amaz_order_[0-9]+
+      sink-table: store.mem_customer_amaz_order_m
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+      when: null
+      json-patches: {}
+    - name: wms_003
+      source-table: StoreServer.mem_customer_amaz_order_history
+      sink-table: store.mem_customer_amaz_order_m
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+      when: null
+      json-patches: {}
+    - name: wms_004
+      source-table: StoreServer.mem_customer_amaz_order_item
+      sink-table: store.mem_customer_amaz_order_item_m
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+      when: null
+      json-patches: {}
+    - name: wms_005
+      source-table: StoreServer.mem_customer_amaz_order_item_[0-9]+
+      sink-table: store.mem_customer_amaz_order_item_m
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+      when: null
+      json-patches: {}
+    - name: wms_006
+      source-table: StoreServer.mem_customer_amaz_order_item_history
+      sink-table: store.mem_customer_amaz_order_item_m
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+      when: null
+      json-patches: {}
+    - name: wms_007
+      source-table: StoreServer.mem_customer_walmart_order
+      sink-table: store.mem_customer_walmart_order_m
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+      when: null
+      json-patches: {}
+    - name: wms_008
+      source-table: StoreServer.mem_customer_walmart_order_[0-9]+
+      sink-table: store.mem_customer_walmart_order_m
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+      when: null
+      json-patches: {}
+    - name: wms_009
+      source-table: StoreServer.mem_customer_walmart_order_history
+      sink-table: store.mem_customer_walmart_order_m
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+      when: null
+      json-patches: {}
+    - name: wms_010
+      source-table: StoreServer.mem_customer_walmart_order_item
+      sink-table: store.mem_customer_walmart_order_item_m
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+      when: null
+      json-patches: {}
+    - name: wms_011
+      source-table: StoreServer.mem_customer_walmart_order_item_[0-9]+
+      sink-table: store.mem_customer_walmart_order_item_m
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+      when: null
+      json-patches: {}
+    - name: wms_012
+      source-table: StoreServer.mem_customer_walmart_order_item_history
+      sink-table: store.mem_customer_walmart_order_item_m
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+      when: null
+      json-patches: {}
+    - name: wms_013
+      source-table: StoreServer.sys_warehouse_outbound
+      sink-table: store.sys_warehouse_outbound_m
+      source-key:
+        - outbound_id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+        wh_type:
+            function: int64
+            args:
+                - literal: "1"
+      when: null
+      json-patches: {}
+    - name: wms_014
+      source-table: StoreServer.sys_warehouse_outbound_([0-9]+|[0-9]+_history)
+      sink-table: store.sys_warehouse_outbound_m
+      source-key:
+        - outbound_id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+        wh_type:
+            function: int64
+            args:
+                - literal: "1"
+      when: null
+      json-patches: {}
+    - name: wms_015
+      source-table: StoreServer.thd_warehouse_outbound
+      sink-table: store.sys_warehouse_outbound_m
+      source-key:
+        - outbound_id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+        wh_type:
+            function: int64
+            args:
+                - literal: "3"
+      when: null
+      json-patches: {}
+    - name: wms_016
+      source-table: StoreServer.mem_supplier_warehouse_outbound
+      sink-table: store.sys_warehouse_outbound_m
+      source-key:
+        - outbound_id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+        wh_type:
+            function: int64
+            args:
+                - literal: "2"
+      when: null
+      json-patches: {}
+    - name: wms_017
+      source-table: StoreServer.sys_warehouse_outbound_tracking
+      sink-table: store.sys_warehouse_outbound_tracking_m
+      source-key:
+        - outbound_id
+        - tracking_number
+        - delete
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+      when: null
+      json-patches: {}
+    - name: wms_018
+      source-table: StoreServer.sys_warehouse_outbound_tracking_([0-9]+|[0-9]+_history)
+      sink-table: store.sys_warehouse_outbound_tracking_m
+      source-key:
+        - outbound_id
+        - tracking_number
+        - delete
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+      when: null
+      json-patches: {}
+    - name: wms_019
+      source-table: StoreServer.thd_warehouse_outbound_tracking
+      sink-table: store.sys_warehouse_outbound_tracking_m
+      source-key:
+        - outbound_id
+        - tracking_number
+        - delete
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+      when: null
+      json-patches: {}
+    - name: wms_020
+      source-table: StoreServer.mem_supplier_warehouse_outbound_tracking
+      sink-table: store.sys_warehouse_outbound_tracking_m
+      source-key:
+        - outbound_id
+        - tracking_number
+        - delete
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+      when: null
+      json-patches: {}
+    - name: wms_021
+      source-table: StoreServer.sys_warehouse_outbound_upload_file_record
+      sink-table: store.sys_warehouse_outbound_upload_file_record_m
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+      when: null
+      json-patches: {}
+    - name: wms_022
+      source-table: StoreServer.sys_warehouse_outbound_upload_file_record_([0-9]+|[0-9]+_history)
+      sink-table: store.sys_warehouse_outbound_upload_file_record_m
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+      when: null
+      json-patches: {}
+    - name: wms_023
+      source-table: StoreServer.thd_warehouse_outbound_upload_file_record
+      sink-table: store.sys_warehouse_outbound_upload_file_record_m
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+      when: null
+      json-patches: {}
+    - name: wms_024
+      source-table: StoreServer.mem_supplier_warehouse_outbound_upload_file_record
+      sink-table: store.sys_warehouse_outbound_upload_file_record_m
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+      when: null
+      json-patches: {}
+    - name: wms_025
+      source-table: StoreServer.sys_warehouse_outbound_product
+      sink-table: store.sys_warehouse_outbound_product_m
+      source-key:
+        - outbound_id
+        - upc
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+      when: null
+      json-patches: {}
+    - name: wms_026
+      source-table: StoreServer.sys_warehouse_outbound_product_([0-9]+|[0-9]+_history)
+      sink-table: store.sys_warehouse_outbound_product_m
+      source-key:
+        - outbound_id
+        - upc
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+      when: null
+      json-patches: {}
+    - name: wms_027
+      source-table: StoreServer.thd_warehouse_outbound_product
+      sink-table: store.sys_warehouse_outbound_product_m
+      source-key:
+        - outbound_id
+        - upc
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+      when: null
+      json-patches: {}
+    - name: wms_028
+      source-table: StoreServer.mem_supplier_warehouse_outbound_product
+      sink-table: store.sys_warehouse_outbound_product_m
+      source-key:
+        - outbound_id
+        - upc
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+      when: null
+      json-patches: {}
+    - name: wms_029
+      source-table: StoreServer.sys_warehouse_outbound_sn_record
+      sink-table: store.sys_warehouse_outbound_sn_record_m
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+      when: null
+      json-patches: {}
+    - name: wms_030
+      source-table: StoreServer.sys_warehouse_outbound_sn_record_history
+      sink-table: store.sys_warehouse_outbound_sn_record_m
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+      when: null
+      json-patches: {}
+    - name: wms_031
+      source-table: StoreServer.sys_warehouse_outbound_sn_record_([0-9]+|[0-9]+_history)
+      sink-table: store.sys_warehouse_outbound_sn_record_m
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+      when: null
+      json-patches: {}
+    - name: wms_032
+      source-table: StoreServer.thd_warehouse_outbound_sn_record
+      sink-table: store.sys_warehouse_outbound_sn_record_m
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+      when: null
+      json-patches: {}
+    - name: wms_033
+      source-table: StoreServer.mem_supplier_warehouse_outbound_sn_record
+      sink-table: store.sys_warehouse_outbound_sn_record_m
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+      when: null
+      json-patches: {}
+    - name: wms_034
+      source-table: StoreServer.mem_supplier_warehouse_outbound_sn_record_history
+      sink-table: store.sys_warehouse_outbound_sn_record_m
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+      when: null
+      json-patches: {}
+    - name: wms_035
+      source-table: StoreServer.sys_warehouse_outbound_product_bo_sn
+      sink-table: store.sys_warehouse_outbound_product_bo_sn_m
+      source-key:
+        - outbound_id
+        - upc
+        - bo_sn
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+      when: null
+      json-patches: {}
+    - name: wms_036
+      source-table: StoreServer.sys_warehouse_outbound_product_bo_sn_([0-9]+|[0-9]+_history)
+      sink-table: store.sys_warehouse_outbound_product_bo_sn_m
+      source-key:
+        - outbound_id
+        - upc
+        - bo_sn
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+      when: null
+      json-patches: {}
+    - name: wms_037
+      source-table: StoreServer.thd_warehouse_outbound_product_bo_sn
+      sink-table: store.sys_warehouse_outbound_product_bo_sn_m
+      source-key:
+        - outbound_id
+        - upc
+        - bo_sn
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+      when: null
+      json-patches: {}
+    - name: wms_038
+      source-table: StoreServer.mem_customer_amaz_order_item_gift
+      sink-table: store.mem_customer_amaz_order_item_gift
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_039
+      source-table: StoreServer.mem_customer_amaz_shop
+      sink-table: store.mem_customer_amaz_shop
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_040
+      source-table: StoreServer.mem_customer_amaz_order_tracking
+      sink-table: store.mem_customer_amaz_order_tracking
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_041
+      source-table: StoreServer.mem_customer_walmart_order_item_gift
+      sink-table: store.mem_customer_walmart_order_item_gift
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_042
+      source-table: StoreServer.mem_customer_walmart_shop
+      sink-table: store.mem_customer_walmart_shop
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_043
+      source-table: StoreServer.mem_customer_ship_station_order
+      sink-table: store.mem_customer_ship_station_order
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_044
+      source-table: StoreServer.mem_customer_ship_station_order_item
+      sink-table: store.mem_customer_ship_station_order_item
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_045
+      source-table: StoreServer.mem_customer_ship_station_order_item_gift
+      sink-table: store.mem_customer_ship_station_order_item_gift
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_046
+      source-table: StoreServer.mem_customer_ship_station_shop
+      sink-table: store.mem_customer_ship_station_shop
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_047
+      source-table: StoreServer.mem_customer_best_buy_order
+      sink-table: store.mem_customer_best_buy_order
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_048
+      source-table: StoreServer.mem_customer_best_buy_order_item
+      sink-table: store.mem_customer_best_buy_order_item
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_049
+      source-table: StoreServer.mem_customer_best_buy_order_item_gift
+      sink-table: store.mem_customer_best_buy_order_item_gift
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_050
+      source-table: StoreServer.mem_customer_best_buy_shop
+      sink-table: store.mem_customer_best_buy_shop
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_051
+      source-table: StoreServer.mem_customer_market_order_address_info
+      sink-table: store.mem_customer_market_order_address_info
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_052
+      source-table: StoreServer.mem_customer_market_order_item
+      sink-table: store.mem_customer_market_order_item
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_053
+      source-table: StoreServer.mem_customer_data
+      sink-table: store.mem_customer_data
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_054
+      source-table: StoreServer.mem_customer_product
+      sink-table: store.mem_customer_product
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_055
+      source-table: StoreServer.mem_customer_product_upc_code
+      sink-table: store.mem_customer_product_upc_code
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_056
+      source-table: StoreServer.sys_product
+      sink-table: store.sys_product
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_057
+      source-table: StoreServer.mem_ups_capital
+      sink-table: store.mem_ups_capital
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_058
+      source-table: StoreServer.mem_customer_tracking
+      sink-table: store.mem_customer_tracking
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns:
+        outbound_id:
+            function: json_int
+            args:
+                - from: param
+                - literal: outbound_id
+      when: null
+      json-patches: {}
+    - name: wms_059
+      source-table: StoreServer.hot_warehouse_outbound
+      sink-table: store.hot_warehouse_outbound
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_060
+      source-table: StoreServer.hot_warehouse_outbound_product
+      sink-table: store.hot_warehouse_outbound_product
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_061
+      source-table: StoreServer.hot_warehouse_outbound_sn_record
+      sink-table: store.hot_warehouse_outbound_sn_record
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
