@@ -1,0 +1,95 @@
+{
+  "completed_at": "2026-11-18T15:21:19.5874979+08:00",
+  "success": true,
+  "postgres": "postgres (PostgreSQL) 18.7",
+  "go": "go version go1.27.4 windows/amd64",
+  "tests_passed": 20,
+  "tests_skipped": 0,
+  "port": 56490,
+  "scope": "isolated PG WAL regression including original columns/sidecar/two-database tests; MySQL/Flink not executed",
+  "failure": null,
+  "source_hashes": [
+    {
+      "file": "pgcat-yaml/catalog_test.go",
+      "sha256": "18E201A8CF83F921D79E8639B7D8E4324A9D4F5B6EF4569E8C11A299E0992C4A"
+    },
+    {
+      "file": "pgcat-yaml/codec.go",
+      "sha256": "1A80D51B8543E97552C99528844E2555982D1CDD2AE522ACEA12C4CEF182A0B0"
+    },
+    {
+      "file": "pgcat-yaml/config.go",
+      "sha256": "733074376E74CD05BB8F50BAF826BE2BD733154A80745AC8BAE7D07BD702FDB8"
+    },
+    {
+      "file": "pgcat-yaml/convert.go",
+      "sha256": "A58CBEA8C2A73112766819A0260F766C74B4D063E6F5CF94E09D55727E63CF83"
+    },
+    {
+      "file": "pgcat-yaml/engine_test.go",
+      "sha256": "C3C3AFE2B1E24DBE20BFA7CA7B3B48FDBA72936E7164E888FE1DEF6C2C557D5D"
+    },
+    {
+      "file": "pgcat-yaml/engine.go",
+      "sha256": "A95F643EE294D47F68DC3C416A81D108130D9E8622DE1D7C825AA8B8F37B848C"
+    },
+    {
+      "file": "pgcat-yaml/functions.go",
+      "sha256": "1213172399B814726A0F4F464AFBD47E45E2631194A9EFBB19D388765857B990"
+    },
+    {
+      "file": "pgcat-yaml/generic_integration_test.go",
+      "sha256": "BB95E146391C0B4955E50C7576990CFA3417CF0CCE9DAC4EAF5F5A8704FC675D"
+    },
+    {
+      "file": "pgcat-yaml/generic_test.go",
+      "sha256": "C83F241A2C526621DD66DA3D51F569F0C1FD56DD5D3CAAFC5614FE93D49F0007"
+    },
+    {
+      "file": "pgcat-yaml/identity_store.go",
+      "sha256": "CF2BA4D525ED6676BB224BE01C95F1A60F5FC3F6508CD990262906AFBF5FB173"
+    },
+    {
+      "file": "pgcat-yaml/identity_test.go",
+      "sha256": "3A9C8A778B56CABCDF1E8CEBD8F1291C1CC9584BF1CEADE957A4115648C1B105"
+    },
+    {
+      "file": "pgcat-yaml/identity_two_db_test.go",
+      "sha256": "C863DADBB82ECD22FB8777BE9F3DBAEFE6CA63D92828DC4607FCA195F9CD07EA"
+    },
+    {
+      "file": "pgcat-yaml/identity.go",
+      "sha256": "835881CC771130DD55EEE9C6C17C2CA3580155E1F77AD902DCBDCBC42C8594B2"
+    },
+    {
+      "file": "pgcat-yaml/integration_test.go",
+      "sha256": "EC8939F6FD4FAD74B177B71857E7E8D6AD9AFA9ABA91FCD022B6B8D0BA8FA5B2"
+    },
+    {
+      "file": "pgcat-yaml/main.go",
+      "sha256": "31CC640A4F9C0E0456F5349ADFA8796616199A4CB72A968B2F2BF98C5FFE67DE"
+    },
+    {
+      "file": "pgcat-yaml/ownership.go",
+      "sha256": "C2AC4B8F647609ABD1D4B5630DE49340703B0476636FE6264F35979FA1109457"
+    },
+    {
+      "file": "pgcat-yaml/projection.go",
+      "sha256": "21C4E6CA5CCEF05F9D14E935B8EDDF8A9589219B34DB0AD2F5D0AC15CE95DAC9"
+    },
+    {
+      "file": "pgcat-yaml/routing.go",
+      "sha256": "C388FAB5141F61028B570FA3A551565355FB371328EEB093F0EEFF4C43F4B38E"
+    },
+    {
+      "file": "pgcat-yaml/runtime.go",
+      "sha256": "C058F90B29267E02FA8F3513C6541FE12C8456423E9EE51F8178B40E89568E8C"
+    },
+    {
+      "file": "pgcat-yaml/store.go",
+      "sha256": "E30714A75467BEA392DA8F90C37522EB74269C2E91CCA3567712BAFF370FD41C"
+    }
+  ],
+  "source_commit": "28ac543",
+  "export_scope": "git archive HEAD pgcat-yaml; excludes all untracked workspace inventory files"
+}

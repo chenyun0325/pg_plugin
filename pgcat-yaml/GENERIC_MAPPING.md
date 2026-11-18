@@ -2,6 +2,8 @@
 
 本分支从 `codex/sidecar-identity-map` 的 `9c87403` 创建，分支名为 `codex/generic-mapping-uid-failover`。保留原 columns 模式、sidecar 模式、静态路由、分片搬迁、JSON patch、事务 checkpoint 和内部身份恢复协议。新增能力通过显式配置开启，已有 YAML 不需要增加业务 outbox，也不需要为兼容新引擎改写。
 
+验证记录见 [GENERIC_VALIDATION.md](GENERIC_VALIDATION.md)，包含从已提交纯净源码运行的新旧真 WAL 回归结果。
+
 ## 1 方案与已实现范围
 
 | 场景 | 执行方式 | 业务 outbox |
