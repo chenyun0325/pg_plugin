@@ -11,6 +11,8 @@
 
 `cdc_meta.tx_context` 和业务事务一起提交。后续每一跳使用新的 `marker_id`，保留原始 `root_tx_id`、UID、代次、主写端和屏障号。PG 间还要求 replication origin 与阶段匹配。跨 MySQL 时，事务标记提供跨引擎来源证据。回声可以提交同步进度，禁止重发来源标记。来自未登记阶段或无标记的业务事件会停在故障位置。
 
+多个业务族可以共用上下文表。每个通道只忽略其他 namespace 且无本通道捕获行的标记。事务若同时涉及本通道业务表和其他 namespace，作业停止以保护路由边界。一个通道的应用原子性覆盖纳管表集合，跨族事务须先重新划定纳管范围。
+
 ## 写权与独立 schema
 
 | 对象 | 用途 |
@@ -57,11 +59,17 @@ docker compose -p uid-cdc-lab -f cdc-replay-v2/compose.yaml down -v
 
 Linux 使用 `pwsh`，二进制路径去掉 `.exe`。脚本初始化样例数据库，启动四条链路，运行断言，退出时停止脚本启动的进程。局部失败时保留每段日志、offset 和 history 文件。脚本末尾故意在实验源提交非法混合 UID 事务。重复实验使用一次性空库和全新工作目录。
 
+需要用本地 Flink 执行入口复测时，先从公共模块生成依赖路径，再给同一脚本增加参数 `-FlinkClasspathFile ../cdc-pg-sink/tx-bridge/target/flink-classpath.txt`。该模式用 Flink 1.20.1 本地 MiniCluster 启动两个 JAR job。
+
+```powershell
+mvn -f ../cdc-pg-sink/tx-bridge/pom.xml org.apache.maven.plugins:maven-dependency-plugin:3.8.1:build-classpath '-Dmdep.outputFile=target/flink-classpath.txt'
+```
+
 | 验收项 | 检查 |
 | --- | --- |
 | MySQL 四表 → PG 合表 | `101,102,103,104`；仅正向写入标记、回声有收据。 |
 | MySQL → PG 主切换 | 屏障两跳先收敛，MySQL 旧代写被拒，PG 合表更新反向写至两套分表。 |
-| 跨表身份和 UID 隔离 | 历史四个主键保持 `1,2,3,4`；UID 2 可独立 DELETE/INSERT 且由 MySQL 主写。 |
+| 跨表身份和 UID 隔离 | stock 和 reserved 同有 `id=1`，投影用 `(kind,id)` 区分，反向保留四个原始主键 `1,1,3,4`。UID 2 可独立 DELETE/INSERT 且由 MySQL 主写。 |
 | PG → MySQL 故障切回 | PG 日志消费进程先重启，反向屏障仍可送达。新代为 3。MySQL 只改 stock 后，各节点其余三项保持 PG 旧主最后值。 |
 | 目标第二表写入失败 | 第一表回滚，没有应用收据。修复临时 CHECK 后重启，从持久 offset 重读并提交一次。 |
 | 恢复已过期的源 offset | 同一事务再次交付时原标记仍只有一条，作业可继续应用后续事务。 |

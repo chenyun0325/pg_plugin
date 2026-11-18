@@ -3,7 +3,7 @@ USE inventory_legacy;
 CREATE TABLE stock (id int PRIMARY KEY, uid bigint NOT NULL UNIQUE, qty int NOT NULL) ENGINE=InnoDB;
 INSERT INTO stock VALUES (1,1,10),(11,2,20);
 CREATE TABLE reserved (id int PRIMARY KEY, uid bigint NOT NULL UNIQUE, qty int NOT NULL) ENGINE=InnoDB;
-INSERT INTO reserved VALUES (2,1,11),(12,2,21);
+INSERT INTO reserved VALUES (1,1,11),(11,2,21);
 CREATE TABLE hold (id int PRIMARY KEY, uid bigint NOT NULL UNIQUE, qty int NOT NULL) ENGINE=InnoDB;
 INSERT INTO hold VALUES (3,1,12),(13,2,22);
 CREATE TABLE available (id int PRIMARY KEY, uid bigint NOT NULL UNIQUE, qty int NOT NULL) ENGINE=InnoDB;

@@ -76,6 +76,9 @@ func (r *runtime) prepareReplay(tx pgx.Tx, m *replayMarker, origin string, count
 	if count == 0 && m == nil {
 		return false, nil
 	}
+	if m != nil && m.namespace != c.Namespace && count == 0 {
+		return false, nil // Other namespaces may share the marker publication.
+	}
 	if m == nil || m.namespace != c.Namespace || (m.barrier == nil) != (count > 0) {
 		return false, fmt.Errorf("missing/invalid replay-v2 transaction context")
 	}

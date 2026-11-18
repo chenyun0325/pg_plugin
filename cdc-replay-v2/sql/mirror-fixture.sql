@@ -4,7 +4,7 @@ ALTER TABLE inventory_legacy.stock REPLICA IDENTITY FULL;
 INSERT INTO inventory_legacy.stock VALUES (1,1,10),(11,2,20);
 CREATE TABLE inventory_legacy.reserved (id int PRIMARY KEY, uid bigint NOT NULL UNIQUE, qty int NOT NULL);
 ALTER TABLE inventory_legacy.reserved REPLICA IDENTITY FULL;
-INSERT INTO inventory_legacy.reserved VALUES (2,1,11),(12,2,21);
+INSERT INTO inventory_legacy.reserved VALUES (1,1,11),(11,2,21);
 CREATE TABLE inventory_legacy.hold (id int PRIMARY KEY, uid bigint NOT NULL UNIQUE, qty int NOT NULL);
 ALTER TABLE inventory_legacy.hold REPLICA IDENTITY FULL;
 INSERT INTO inventory_legacy.hold VALUES (3,1,12),(13,2,22);

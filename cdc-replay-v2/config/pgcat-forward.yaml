@@ -21,7 +21,7 @@ route:
     source-table: 'inventory_legacy\.stock'
     sink-table: inventory_projection.parts
     source-key: [id]
-    primary-keys: [id]
+    primary-keys: [kind, id]
     include-all: true
     columns:
       kind: {literal: 'stock'}
@@ -29,7 +29,7 @@ route:
     source-table: 'inventory_legacy\.reserved'
     sink-table: inventory_projection.parts
     source-key: [id]
-    primary-keys: [id]
+    primary-keys: [kind, id]
     include-all: true
     columns:
       kind: {literal: 'reserved'}
@@ -37,7 +37,7 @@ route:
     source-table: 'inventory_legacy\.hold'
     sink-table: inventory_projection.parts
     source-key: [id]
-    primary-keys: [id]
+    primary-keys: [kind, id]
     include-all: true
     columns:
       kind: {literal: 'hold'}
@@ -45,7 +45,7 @@ route:
     source-table: 'inventory_legacy\.available'
     sink-table: inventory_projection.parts
     source-key: [id]
-    primary-keys: [id]
+    primary-keys: [kind, id]
     include-all: true
     columns:
       kind: {literal: 'available'}

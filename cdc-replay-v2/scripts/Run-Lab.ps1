@@ -7,7 +7,8 @@ param(
     [string]$Psql = 'psql',
     [string]$Mysql = 'mysql',
     [string]$Java = 'java',
-    [string]$RunDirectory
+    [string]$RunDirectory,
+    [string]$FlinkClasspathFile
 )
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
@@ -21,6 +22,7 @@ $Pgcat = (Resolve-Path -LiteralPath $Pgcat).Path
 $PgSinkJar = (Resolve-Path -LiteralPath $PgSinkJar).Path
 $MysqlSinkJar = (Resolve-Path -LiteralPath $MysqlSinkJar).Path
 $Java = (Get-Command $Java).Source
+$flinkClasspath = if ($FlinkClasspathFile) { (Get-Content -LiteralPath $FlinkClasspathFile -Raw).Trim() }
 $workers = @{}
 $dsns = @{
     UID_LAB_MIRROR_DSN = 'host=127.0.0.1 port=56543 user=postgres dbname=uid_mirror sslmode=disable'
@@ -77,14 +79,24 @@ function Stop-Worker([string]$Name) {
         $null = $worker.WaitForExit(10000)
     }
 }
+function Start-Bridge([string]$Name, [bool]$MysqlSource) {
+    $jar = if ($MysqlSource) { $PgSinkJar } else { $MysqlSinkJar }
+    $file = if ($MysqlSource) { 'mysql-to-mirror.yaml' } else { 'mirror-to-mysql.yaml' }
+    $config = Join-Path $lab "config/$file"
+    if ($flinkClasspath) {
+        $class = if ($MysqlSource) { 'com.example.flinkcdc.tx.CdcTxJob' } else { 'com.example.flinkcdc.tx.mysql.MysqlTxJob' }
+        return Start-Worker $Name $Java @('-cp',($jar + [IO.Path]::PathSeparator + $flinkClasspath),$class,'--config',$config)
+    }
+    Start-Worker $Name $Java @('-jar',$jar,'--config',$config)
+}
 function Start-MysqlSource {
-    Start-Worker mysql-to-mirror $Java @('-jar',$PgSinkJar,'--config',(Join-Path $lab 'config/mysql-to-mirror.yaml'))
+    Start-Bridge mysql-to-mirror $true
     Wait-For 'MySQL binlog connected' {
         My "SELECT COUNT(*) FROM information_schema.processlist WHERE COMMAND LIKE 'Binlog Dump%'"
     } '1'
 }
 function Start-PgSource {
-    Start-Worker mirror-to-mysql $Java @('-jar',$MysqlSinkJar,'--config',(Join-Path $lab 'config/mirror-to-mysql.yaml'))
+    Start-Bridge mirror-to-mysql $false
     Wait-For 'PG source slot active' { Pg postgres "SELECT count(*) FROM pg_replication_slots WHERE slot_name='inv_mysql_sink' AND active" } '1'
 }
 function MirrorStock {
@@ -162,6 +174,11 @@ try {
     }
     Start-PgSource
     Start-MysqlSource
+    $otherMarker = "INSERT INTO cdc_meta.tx_context(marker_id,scope_namespace,root_tx_id,writer_side,apply_stage,uid,epoch)
+        VALUES ('other-family','other_namespace','other-family','MYSQL','native',1,1)"
+    $null = My $otherMarker
+    $null = Pg uid_mirror $otherMarker
+    $null = Pg uid_merged $otherMarker
 
     $null = My "START TRANSACTION; CALL cdc_meta.begin_mysql_write('inventory',1,1,'tx-four-mysql');
         UPDATE inventory_legacy.stock SET qty=101 WHERE uid=1;
@@ -171,6 +188,7 @@ try {
     Wait-For 'four MySQL tables projected' { Summary } '101,102,103,104'
     Wait-For 'MySQL transaction echo receipt' { My "SELECT count(*) FROM cdc_meta.applied_tx WHERE result='ECHO'" } '1'
     Assert-Value 'PG echo created no raw replay' (Pg uid_mirror "SELECT count(*) FROM cdc_meta.tx_context WHERE root_tx_id='tx-four-mysql'") 1
+    Assert-Value 'other namespace marker not forwarded' (Pg uid_mirror "SELECT count(*) FROM cdc_meta.tx_context WHERE root_tx_id='other-family'") 1
     Assert-Value 'UID 2 initial values' (Summary 2) '20,21,22,23'
     Write-Host 'PASS MySQL four-table forward and echo suppression'
 
@@ -186,7 +204,7 @@ try {
     Assert-Value 'PG raw four tables' (MirrorStock) '201,202,203,204'
     Assert-Value 'Original raw IDs retained' (My "SELECT concat_ws(',',s.id,r.id,h.id,a.id) FROM inventory_legacy.stock s
         JOIN inventory_legacy.reserved r USING(uid) JOIN inventory_legacy.hold h USING(uid)
-        JOIN inventory_legacy.available a USING(uid) WHERE s.uid=1") '1,2,3,4'
+        JOIN inventory_legacy.available a USING(uid) WHERE s.uid=1") '1,1,3,4'
     Write-Host 'PASS MYSQL epoch 1 -> PG epoch 2, PG reverse and echo suppression'
 
     $null = My "START TRANSACTION; CALL cdc_meta.begin_mysql_write('inventory',2,1,'tx-uid2-replace');
@@ -252,7 +270,7 @@ try {
     $savedOffset = Join-Path $run 'mysql-offset-preserved.dat'
     Move-Item -LiteralPath $offset -Destination $savedOffset
     try {
-        Start-Worker mysql-missing-offset $Java @('-jar',$PgSinkJar,'--config',(Join-Path $lab 'config/mysql-to-mirror.yaml'))
+        Start-Bridge mysql-missing-offset $true
         Wait-For 'source refused to start without offset' { $workers['mysql-missing-offset'].HasExited } 'True'
         if (!(Select-String -Quiet -SimpleMatch 'durable offset diverged' (Join-Path $run 'mysql-missing-offset.err'))) {
             throw 'Expected durable offset rejection in worker log.'
@@ -265,7 +283,7 @@ try {
     Copy-Item -LiteralPath $offset -Destination $savedOffset
     try {
         [IO.File]::WriteAllBytes($offset, [byte[]]@(172,237,0,5,115))
-        Start-Worker mysql-corrupt-offset $Java @('-jar',$PgSinkJar,'--config',(Join-Path $lab 'config/mysql-to-mirror.yaml'))
+        Start-Bridge mysql-corrupt-offset $true
         Wait-For 'source refused to start from corrupt offset' { $workers['mysql-corrupt-offset'].HasExited } 'True'
         if (!(Select-String -Quiet -SimpleMatch 'Invalid durable source offset' (Join-Path $run 'mysql-corrupt-offset.err'))) {
             throw 'Expected corrupt offset rejection in worker log.'

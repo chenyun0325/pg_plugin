@@ -4,9 +4,9 @@ CREATE SCHEMA inventory_projection;
 CREATE TABLE inventory_app.summary (uid bigint PRIMARY KEY, stock_qty int NOT NULL, reserved_qty int NOT NULL, hold_qty int NOT NULL, available_qty int NOT NULL);
 ALTER TABLE inventory_app.summary REPLICA IDENTITY FULL;
 CREATE TABLE inventory_projection.parts (
-  id int PRIMARY KEY, uid bigint NOT NULL, kind text NOT NULL, qty int NOT NULL,
+  id int NOT NULL, uid bigint NOT NULL, kind text NOT NULL, qty int NOT NULL,
   _sync_source text, _sync_table text, _sync_pk text,
-  UNIQUE(uid,kind)
+  PRIMARY KEY(kind,id), UNIQUE(uid,kind)
 );
 CREATE FUNCTION inventory_projection.refresh_summary() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE affected_uid bigint := CASE WHEN TG_OP='DELETE' THEN OLD.uid ELSE NEW.uid END;
@@ -48,8 +48,8 @@ $$;
 INSERT INTO inventory_projection.parts(id,uid,kind,qty) VALUES
   (1,1,'stock',10),
   (11,2,'stock',20),
-  (2,1,'reserved',11),
-  (12,2,'reserved',21),
+  (1,1,'reserved',11),
+  (11,2,'reserved',21),
   (3,1,'hold',12),
   (13,2,'hold',22),
   (4,1,'available',13),
