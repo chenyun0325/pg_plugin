@@ -1,0 +1,12 @@
+CREATE DATABASE inventory_legacy;
+USE inventory_legacy;
+CREATE TABLE stock (id int PRIMARY KEY, uid bigint NOT NULL UNIQUE, qty int NOT NULL) ENGINE=InnoDB;
+INSERT INTO stock VALUES (1,1,10),(11,2,20);
+CREATE TABLE reserved (id int PRIMARY KEY, uid bigint NOT NULL UNIQUE, qty int NOT NULL) ENGINE=InnoDB;
+INSERT INTO reserved VALUES (2,1,11),(12,2,21);
+CREATE TABLE hold (id int PRIMARY KEY, uid bigint NOT NULL UNIQUE, qty int NOT NULL) ENGINE=InnoDB;
+INSERT INTO hold VALUES (3,1,12),(13,2,22);
+CREATE TABLE available (id int PRIMARY KEY, uid bigint NOT NULL UNIQUE, qty int NOT NULL) ENGINE=InnoDB;
+INSERT INTO available VALUES (4,1,13),(14,2,23);
+INSERT INTO cdc_meta.write_ownership VALUES ('inventory',1,'MYSQL',1,'ACTIVE',NULL),('inventory',2,'MYSQL',1,'ACTIVE',NULL);
+INSERT INTO cdc_meta.apply_progress(channel,source_stream_id) VALUES ('mirror_to_mysql','mirror-lab-v1');

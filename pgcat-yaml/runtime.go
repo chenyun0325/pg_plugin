@@ -48,6 +48,7 @@ func openRuntime(ctx context.Context, c *Config) (*runtime, error) {
 		r.close()
 		return nil, e
 	}
+	contextTablePublished := false
 	for rows.Next() {
 		var a, b string
 		if e = rows.Scan(&a, &b); e != nil {
@@ -56,6 +57,10 @@ func openRuntime(ctx context.Context, c *Config) (*runtime, error) {
 			return nil, e
 		}
 		t := a + "." + b
+		if c.Replay != nil && t == replayContextTable {
+			contextTablePublished = true
+			continue
+		}
 		if len(c.routes(t)) == 0 {
 			rows.Close()
 			r.close()
@@ -68,6 +73,10 @@ func openRuntime(ctx context.Context, c *Config) (*runtime, error) {
 	if e != nil || len(r.tables) == 0 {
 		r.close()
 		return nil, fmt.Errorf("empty or invalid publication: %v", e)
+	}
+	if c.Replay != nil && !contextTablePublished {
+		r.close()
+		return nil, fmt.Errorf("replay-v2 publication must include %s", replayContextTable)
 	}
 	for _, t := range r.tables {
 		var full bool
@@ -377,11 +386,22 @@ func tupleRow(rel *pglogrepl.RelationMessage, t *pglogrepl.TupleData) (Row, erro
 	return out, nil
 }
 func (r *runtime) commit(changes []wireChange, end pglogrepl.LSN, origin string) error {
+	return r.commitReplay(changes, end, origin, nil)
+}
+
+func (r *runtime) commitReplay(changes []wireChange, end pglogrepl.LSN, origin string, marker *replayMarker) error {
 	tx, e := r.dst.Begin(r.ctx)
 	if e != nil {
 		return e
 	}
 	defer tx.Rollback(context.Background())
+	apply := origin == ""
+	if r.c.Replay != nil {
+		apply, e = r.prepareReplay(tx, marker, origin, len(changes))
+		if e != nil {
+			return e
+		}
+	}
 	identityIndex := 0
 	for ordinal, ch := range changes {
 		table := ch.rel.Namespace + "." + ch.rel.RelationName
@@ -450,7 +470,12 @@ func (r *runtime) commit(changes []wireChange, end pglogrepl.LSN, origin string)
 				}
 			}
 		}
-		if origin == "" {
+		if r.c.Replay != nil {
+			if e = r.c.Replay.checkScope(marker, before, after); e != nil {
+				return e
+			}
+		}
+		if apply {
 			if e = r.guardOwnership(tx, before, after); e != nil {
 				return e
 			}
@@ -495,6 +520,11 @@ func (r *runtime) commit(changes []wireChange, end pglogrepl.LSN, origin string)
 				}
 				identityIndex++
 			}
+		}
+	}
+	if r.c.Replay != nil && apply {
+		if e = r.recordReplay(tx, marker, end.String()); e != nil {
+			return e
 		}
 	}
 	if e = r.checkpoint(tx, end.String()); e != nil {
@@ -572,6 +602,7 @@ func (r *runtime) poll() (bool, error) {
 	}
 	relations := map[uint32]*pglogrepl.RelationMessage{}
 	var changes []wireChange
+	var marker *replayMarker
 	origin := ""
 	inTx := false
 	last := pos
@@ -587,6 +618,7 @@ func (r *runtime) poll() (bool, error) {
 			inTx = true
 			origin = ""
 			changes = nil
+			marker = nil
 		case *pglogrepl.OriginMessage:
 			origin = m.Name
 		case *pglogrepl.LogicalDecodingMessage:
@@ -611,6 +643,20 @@ func (r *runtime) poll() (bool, error) {
 			if rel == nil {
 				return false, fmt.Errorf("missing relation")
 			}
+			if r.c.Replay != nil && rel.Namespace+"."+rel.RelationName == replayContextTable {
+				if !inTx || marker != nil {
+					return false, fmt.Errorf("expected one transaction marker inside WAL transaction")
+				}
+				row, err := tupleRow(rel, m.Tuple)
+				if err != nil {
+					return false, err
+				}
+				marker, err = parseReplayMarker(row)
+				if err != nil {
+					return false, err
+				}
+				continue
+			}
 			changes = append(changes, wireChange{rel: rel, new: m.Tuple, kind: 'I'})
 		case *pglogrepl.UpdateMessage:
 			rel := relations[m.RelationID]
@@ -626,7 +672,7 @@ func (r *runtime) poll() (bool, error) {
 			changes = append(changes, wireChange{rel: rel, old: m.OldTuple, kind: 'D'})
 		case *pglogrepl.CommitMessage:
 			if m.TransactionEndLSN > pos {
-				if err = r.commit(changes, m.TransactionEndLSN, origin); err != nil {
+				if err = r.commitReplay(changes, m.TransactionEndLSN, origin, marker); err != nil {
 					return false, err
 				}
 				last = m.TransactionEndLSN

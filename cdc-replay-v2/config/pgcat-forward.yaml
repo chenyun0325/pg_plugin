@@ -1,0 +1,51 @@
+version: 1
+job: pgcat_forward
+source:
+  id: inventory_mirror
+  dsn-env: UID_LAB_MIRROR_DSN
+  publication: inv_forward
+  slot: inv_forward
+  plugin: pgoutput
+  snapshot: seed
+sink:
+  id: inventory_merged
+  dsn-env: UID_LAB_MERGED_DSN
+  origin: inv_forward_origin
+replay-v2:
+  namespace: inventory
+  direction: forward
+  uid-field: uid
+  peer-origin: inv_reverse_origin
+route:
+  - name: stock
+    source-table: 'inventory_legacy\.stock'
+    sink-table: inventory_projection.parts
+    source-key: [id]
+    primary-keys: [id]
+    include-all: true
+    columns:
+      kind: {literal: 'stock'}
+  - name: reserved
+    source-table: 'inventory_legacy\.reserved'
+    sink-table: inventory_projection.parts
+    source-key: [id]
+    primary-keys: [id]
+    include-all: true
+    columns:
+      kind: {literal: 'reserved'}
+  - name: hold
+    source-table: 'inventory_legacy\.hold'
+    sink-table: inventory_projection.parts
+    source-key: [id]
+    primary-keys: [id]
+    include-all: true
+    columns:
+      kind: {literal: 'hold'}
+  - name: available
+    source-table: 'inventory_legacy\.available'
+    sink-table: inventory_projection.parts
+    source-key: [id]
+    primary-keys: [id]
+    include-all: true
+    columns:
+      kind: {literal: 'available'}

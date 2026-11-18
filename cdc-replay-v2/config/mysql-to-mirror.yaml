@@ -1,0 +1,24 @@
+channel: mysql_to_mirror
+namespace: inventory
+source-stream-id: mysql-lab-v1
+source:
+  type: mysql
+  password-env: UID_LAB_MYSQL_PASSWORD
+  offset-file: mysql-offset.dat
+  history-file: mysql-history.dat
+  properties:
+    database.server.name: inv_mysql
+    database.hostname: 127.0.0.1
+    database.port: 53306
+    database.user: root
+    database.server.id: 32001
+    database.ssl.mode: disabled
+sink:
+  url: 'jdbc:postgresql://127.0.0.1:56543/uid_mirror?sslmode=disable'
+  username: postgres
+  password-env: UID_LAB_PG_PASSWORD
+tables:
+  - {source: inventory_legacy.stock, target: inventory_legacy.stock, uid: uid, keys: [id], columns: [id, uid, qty]}
+  - {source: inventory_legacy.reserved, target: inventory_legacy.reserved, uid: uid, keys: [id], columns: [id, uid, qty]}
+  - {source: inventory_legacy.hold, target: inventory_legacy.hold, uid: uid, keys: [id], columns: [id, uid, qty]}
+  - {source: inventory_legacy.available, target: inventory_legacy.available, uid: uid, keys: [id], columns: [id, uid, qty]}

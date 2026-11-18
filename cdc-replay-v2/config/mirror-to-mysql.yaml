@@ -1,0 +1,25 @@
+channel: mirror_to_mysql
+namespace: inventory
+source-stream-id: mirror-lab-v1
+source:
+  type: postgres
+  password-env: UID_LAB_PG_PASSWORD
+  offset-file: mirror-offset.dat
+  properties:
+    database.server.name: inv_mirror
+    database.hostname: 127.0.0.1
+    database.port: 56543
+    database.user: postgres
+    database.dbname: uid_mirror
+    slot.name: inv_mysql_sink
+    publication.name: inv_mysql_sink
+    database.sslmode: disable
+sink:
+  url: 'jdbc:mysql://127.0.0.1:53306/inventory_legacy?sslMode=DISABLED&allowPublicKeyRetrieval=true'
+  username: root
+  password-env: UID_LAB_MYSQL_PASSWORD
+tables:
+  - {source: inventory_legacy.stock, target: inventory_legacy.stock, uid: uid, keys: [id], columns: [id, uid, qty]}
+  - {source: inventory_legacy.reserved, target: inventory_legacy.reserved, uid: uid, keys: [id], columns: [id, uid, qty]}
+  - {source: inventory_legacy.hold, target: inventory_legacy.hold, uid: uid, keys: [id], columns: [id, uid, qty]}
+  - {source: inventory_legacy.available, target: inventory_legacy.available, uid: uid, keys: [id], columns: [id, uid, qty]}

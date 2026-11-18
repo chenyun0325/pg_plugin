@@ -31,6 +31,7 @@ type Config struct {
 	RouteMode  string           `yaml:"route-mode,omitempty"`
 	Transforms []TransformRule  `yaml:"transform,omitempty"`
 	Ownership  *OwnershipConfig `yaml:"ownership,omitempty"`
+	Replay     *ReplayConfig    `yaml:"replay-v2,omitempty"`
 	Identity   struct {
 		Mode      string `yaml:"mode,omitempty"`
 		Namespace string `yaml:"namespace,omitempty"`
@@ -135,6 +136,11 @@ func loadConfig(path string) (*Config, error) {
 		o := c.Ownership
 		if o.Namespace == "" || o.UIDField == "" || o.Writer == "" || o.EpochField == "" {
 			return nil, fmt.Errorf("ownership requires namespace, uid-field, writer and epoch-field; untagged events cannot be fenced")
+		}
+	}
+	if c.Replay != nil {
+		if err = c.Replay.validate(c); err != nil {
+			return nil, err
 		}
 	}
 	seen := map[string]bool{}
