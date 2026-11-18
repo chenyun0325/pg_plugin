@@ -19,7 +19,7 @@ func main() {
 }
 func entry() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: pgcat-yaml check|init|run --config file.yaml [--once] [--recreate-slot]; convert-wms --input flink.yaml --output pgcat.yaml")
+		return fmt.Errorf("usage: pgcat-yaml check|setup|init|run --config file.yaml [--once] [--recreate-slot]; convert-wms --input flink.yaml --output pgcat.yaml")
 	}
 	cmd := os.Args[1]
 	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
@@ -53,11 +53,15 @@ func entry() error {
 		log.Printf("configuration valid job=%s source_tables=%d hash=%s", c.Job, len(r.tables), c.digest)
 		return nil
 	}
-	if cmd != "init" && cmd != "run" {
+	if cmd != "init" && cmd != "run" && cmd != "setup" {
 		return fmt.Errorf("unknown command %s", cmd)
 	}
 	if e = r.prepare(); e != nil {
 		return e
+	}
+	if cmd == "setup" {
+		log.Printf("metadata prepared job=%s; no snapshot/slot created", c.Job)
+		return nil
 	}
 	if cmd == "init" {
 		return r.init(*reset)

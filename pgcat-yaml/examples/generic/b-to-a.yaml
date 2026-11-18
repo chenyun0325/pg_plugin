@@ -1,0 +1,40 @@
+version: 1
+job: generic_b_to_a_v1
+source:
+  id: generic_new
+  dsn-env: PGCAT_GENERIC_B_DSN
+  publication: pgcat_generic_b_pub
+  slot: pgcat_generic_b_v1
+  plugin: pgoutput
+  snapshot: seed
+sink:
+  id: generic_legacy
+  dsn-env: PGCAT_GENERIC_A_DSN
+  origin: pgcat_generic_from_b
+identity:
+  mode: sidecar
+  namespace: generic_v1
+  bootstrap: require-binding
+route:
+  - name: restore_original_order
+    source-table: 'pgcat_generic_b\.orders'
+    target-from: owner-table
+    allowed-targets: [pgcat_generic_a.orders_0, pgcat_generic_a.orders_1]
+    source-key: [_pk_id]
+    primary-keys: [id]
+    columns:
+      id: {function: json_index, args: [{from: __owner_pk__}, {literal: 0}]}
+      uid: {from: uid}
+      write_epoch: {from: write_epoch}
+      param: {from: param}
+    json-patches:
+      param:
+        - path: [outbound_id]
+          value: {from: outbound_id}
+  - name: copy_customer_back
+    source-table: 'pgcat_generic_b\.customer'
+    sink-table: pgcat_generic_a.<>
+    replace-symbol: <>
+    source-key: [id]
+    primary-keys: [id]
+    include-all: true

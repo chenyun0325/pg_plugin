@@ -1,5 +1,8 @@
 # 旁路身份映射：开发实现与操作
 
+本页所述原能力继续保留。新分支的通用路由和可选 uid 代次门控见
+[GENERIC_MAPPING.md](GENERIC_MAPPING.md)；来源身份、业务写权代次和内部恢复 outbox 是三个不同概念。
+
 本分支在原 Go 映射程序中新增 `identity.mode: sidecar`。业务表不添加 `_sync_source / _sync_table / _sync_pk`，身份、删除历史、源镜像和恢复进度写入 `_pgcat_yaml` 元数据 schema。仍然需要 publication、逻辑复制槽及业务表 `REPLICA IDENTITY FULL`；这不是完全不需要数据库配置的方案。
 
 本程序延续 [kingluo/pgcat](https://github.com/kingluo/pgcat) 的 origin 防环思路。本次新增代码在 `pgcat-yaml` 中，未修改上游 C 扩展；旁路模式使用 PostgreSQL 原生 `pgoutput`，不安装 `pgcat-pgxs`。默认不指定 identity 时仍运行旧的 columns 模式。

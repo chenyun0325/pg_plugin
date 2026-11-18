@@ -27,8 +27,11 @@ type Config struct {
 		DSNEnv string `yaml:"dsn-env"`
 		Origin string `yaml:"origin"`
 	} `yaml:"sink"`
-	Routes   []Route `yaml:"route"`
-	Identity struct {
+	Routes     []Route          `yaml:"route"`
+	RouteMode  string           `yaml:"route-mode,omitempty"`
+	Transforms []TransformRule  `yaml:"transform,omitempty"`
+	Ownership  *OwnershipConfig `yaml:"ownership,omitempty"`
+	Identity   struct {
 		Mode      string `yaml:"mode,omitempty"`
 		Namespace string `yaml:"namespace,omitempty"`
 		Bootstrap string `yaml:"bootstrap,omitempty"`
@@ -39,6 +42,11 @@ type Route struct {
 	Name            string          `yaml:"name"`
 	Source          string          `yaml:"source-table"`
 	Target          string          `yaml:"sink-table"`
+	ReplaceSymbol   string          `yaml:"replace-symbol,omitempty"`
+	TargetFrom      string          `yaml:"target-from,omitempty"`
+	AllowedTargets  []string        `yaml:"allowed-targets,omitempty"`
+	ExcludeSources  []string        `yaml:"exclude-source-tables,omitempty"`
+	UseTransform    bool            `yaml:"use-transform,omitempty"`
 	SourceKey       []string        `yaml:"source-key"`
 	Keys            []string        `yaml:"primary-keys"`
 	IncludeAll      bool            `yaml:"include-all"`
@@ -51,6 +59,7 @@ type Route struct {
 	// Patch only owned JSON paths, preserving other paths at the target.
 	JSONPatches map[string][]JSONPatch `yaml:"json-patches"`
 	patterns    []*regexp.Regexp
+	excluded    []*regexp.Regexp
 }
 type JSONPatch struct {
 	Path  []string `yaml:"path"`
@@ -95,6 +104,9 @@ func loadConfig(path string) (*Config, error) {
 	if c.Identity.Mode == "" {
 		c.Identity.Mode = "columns"
 	}
+	if c.RouteMode != "" && c.RouteMode != "all-match" && c.RouteMode != "first-match" {
+		return nil, fmt.Errorf("route-mode must be all-match or first-match")
+	}
 	if c.Identity.Mode != "columns" && c.Identity.Mode != "sidecar" {
 		return nil, fmt.Errorf("identity.mode must be columns or sidecar")
 	}
@@ -116,13 +128,42 @@ func loadConfig(path string) (*Config, error) {
 	if !regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`).MatchString(c.Source.Slot) {
 		return nil, fmt.Errorf("invalid slot")
 	}
+	if err = c.prepareTransforms(); err != nil {
+		return nil, err
+	}
+	if c.Ownership != nil {
+		o := c.Ownership
+		if o.Namespace == "" || o.UIDField == "" || o.Writer == "" || o.EpochField == "" {
+			return nil, fmt.Errorf("ownership requires namespace, uid-field, writer and epoch-field; untagged events cannot be fenced")
+		}
+	}
 	seen := map[string]bool{}
 	for i := range c.Routes {
 		r := &c.Routes[i]
-		if r.Name == "" || seen[r.Name] || len(r.SourceKey) == 0 || len(r.Keys) == 0 || !qualified(r.Target) {
+		if r.Name == "" || seen[r.Name] || len(r.SourceKey) == 0 || len(r.Keys) == 0 || (r.TargetFrom == "" && !qualified(r.Target)) {
 			return nil, fmt.Errorf("route %d invalid name/keys/target", i)
 		}
 		seen[r.Name] = true
+		if r.TargetFrom != "" {
+			if r.TargetFrom != "owner-table" || len(r.AllowedTargets) == 0 || r.Target != "" || r.ReplaceSymbol != "" {
+				return nil, fmt.Errorf("route %s: owner-table requires only allowed-targets, no sink-table", r.Name)
+			}
+			for _, t := range r.AllowedTargets {
+				if !qualified(t) {
+					return nil, fmt.Errorf("invalid allowed target %s", t)
+				}
+			}
+		}
+		if r.ReplaceSymbol != "" && (r.ReplaceSymbol != "<>" || !strings.Contains(r.Target, r.ReplaceSymbol)) {
+			return nil, fmt.Errorf("route %s: replace-symbol must be <> present in sink-table", r.Name)
+		}
+		for _, p := range r.ExcludeSources {
+			re, e := regexp.Compile("^(?:" + p + ")$")
+			if e != nil {
+				return nil, e
+			}
+			r.excluded = append(r.excluded, re)
+		}
 		if c.sidecar() {
 			for _, key := range r.Keys {
 				if strings.HasPrefix(key, "_sync_") {
@@ -177,6 +218,11 @@ func qualified(s string) bool {
 	return len(p) == 2 && p[0] != "" && p[1] != ""
 }
 func (r Route) matches(table string) bool {
+	for _, p := range r.excluded {
+		if p.MatchString(table) {
+			return false
+		}
+	}
 	for _, p := range r.patterns {
 		if p.MatchString(table) {
 			return true
@@ -189,6 +235,9 @@ func (c *Config) routes(table string) []*Route {
 	for i := range c.Routes {
 		if c.Routes[i].matches(table) {
 			out = append(out, &c.Routes[i])
+			if c.RouteMode == "first-match" {
+				break
+			}
 		}
 	}
 	return out
@@ -200,9 +249,16 @@ func (c *Config) sourceKey(table string) ([]string, error) {
 	}
 	keys := strings.Join(rs[0].SourceKey, "\x00")
 	for _, r := range rs {
-		if strings.Join(r.SourceKey, "\x00") != keys {
+		effective, err := c.effectiveRoute(r, table)
+		if err != nil {
+			return nil, err
+		}
+		if r == rs[0] {
+			keys = strings.Join(effective.SourceKey, "\x00")
+		}
+		if strings.Join(effective.SourceKey, "\x00") != keys {
 			return nil, fmt.Errorf("inconsistent source-key for %s", table)
 		}
 	}
-	return rs[0].SourceKey, nil
+	return strings.Split(keys, "\x00"), nil
 }

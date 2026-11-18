@@ -85,13 +85,18 @@ func openRuntime(ctx context.Context, c *Config) (*runtime, error) {
 			return nil, e
 		}
 	}
-	for _, route := range c.Routes {
+	targets, err := c.targetRoutes(r.tables)
+	if err != nil {
+		r.close()
+		return nil, err
+	}
+	for _, route := range targets {
 		if _, e = r.targetTypes(route.Target); e != nil {
 			r.close()
 			return nil, e
 		}
 		if c.sidecar() {
-			if e = r.validateTargetKeys(&route); e != nil {
+			if e = r.validateTargetKeys(route); e != nil {
 				r.close()
 				return nil, e
 			}
@@ -141,13 +146,22 @@ func (r *runtime) prepare() error {
 				return e
 			}
 		}
-		for _, route := range r.c.Routes {
+		targets, err := r.c.targetRoutes(r.tables)
+		if err != nil {
+			return err
+		}
+		for _, route := range targets {
 			if e := r.registerKeys(r.dst, r.c.Sink.ID, route.Target, route.Keys); e != nil {
 				return e
 			}
 		}
 	} else if _, e := r.dst.Exec(r.ctx, metadataDDL); e != nil {
 		return e
+	}
+	if r.c.Ownership != nil {
+		if _, e := r.dst.Exec(r.ctx, ownershipDDL); e != nil {
+			return e
+		}
 	}
 	var exists bool
 	if e := r.dst.QueryRow(r.ctx, `SELECT pg_replication_origin_oid($1) IS NOT NULL`, r.c.Sink.Origin).Scan(&exists); e != nil {
@@ -285,6 +299,10 @@ func (r *runtime) init(recreate bool) error {
 				owned = identity.Owner.Source == r.c.Source.ID
 			}
 			if r.c.Source.Snapshot == "copy" && owned {
+				if err = r.guardOwnership(tx, nil, row); err != nil {
+					rows.Close()
+					return err
+				}
 				plan, err := r.c.planIdentity(table, nil, row, identity)
 				if err != nil {
 					rows.Close()
@@ -433,6 +451,9 @@ func (r *runtime) commit(changes []wireChange, end pglogrepl.LSN, origin string)
 			}
 		}
 		if origin == "" {
+			if e = r.guardOwnership(tx, before, after); e != nil {
+				return e
+			}
 			plan, err := r.c.planIdentity(table, before, after, identity)
 			if err != nil {
 				return err

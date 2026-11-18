@@ -29,6 +29,11 @@ func (c *Config) projectIdentity(r *Route, table string, row Row, identity *Reco
 	if row == nil {
 		return nil, nil
 	}
+	var err error
+	r, err = c.effectiveRoute(r, table)
+	if err != nil {
+		return nil, err
+	}
 	if p := r.When; p != nil {
 		v, ok := row[p.Field]
 		if !ok || v == nil {
@@ -67,6 +72,13 @@ func (c *Config) projectIdentity(r *Route, table string, row Row, identity *Reco
 		owner = Owner{fmt.Sprint(row["_sync_source"]), fmt.Sprint(row["_sync_table"]), fmt.Sprint(row["_sync_pk"])}
 	}
 	parts := strings.SplitN(table, ".", 2)
+	target, err := r.resolveTarget(table, owner)
+	if err != nil {
+		return nil, err
+	}
+	resolved := *r
+	resolved.Target = target
+	r = &resolved
 	meta := Row{"__table_name__": parts[1], "__schema_name__": parts[0], "__source_id__": c.Source.ID, "__owner_source__": owner.Source, "__owner_table__": owner.Table, "__owner_pk__": owner.PK}
 	if identity != nil {
 		meta["__entity_id__"] = identity.EntityID

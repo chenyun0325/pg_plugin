@@ -1,0 +1,40 @@
+version: 1
+job: generic_a_to_b_v1
+source:
+  id: generic_legacy
+  dsn-env: PGCAT_GENERIC_A_DSN
+  publication: pgcat_generic_a_pub
+  slot: pgcat_generic_a_v1
+  plugin: pgoutput
+  snapshot: copy
+sink:
+  id: generic_new
+  dsn-env: PGCAT_GENERIC_B_DSN
+  origin: pgcat_generic_from_a
+identity:
+  mode: sidecar
+  namespace: generic_v1
+  bootstrap: local
+transform:
+  - source-table: 'pgcat_generic_a\.orders_[01]'
+    source-key: [id]
+    include-all: true
+    columns:
+      _pk_id:
+        function: concat
+        args: [{from: __table_name__}, {literal: '_'}, {from: id}]
+      outbound_id: {function: json_get, args: [{from: param}, {literal: outbound_id}]}
+route:
+  - name: merge_orders
+    source-table: 'pgcat_generic_a\.orders_[01]'
+    sink-table: pgcat_generic_b.orders
+    source-key: [id]
+    primary-keys: [_pk_id]
+    use-transform: true
+  - name: copy_customer
+    source-table: 'pgcat_generic_a\.customer'
+    sink-table: pgcat_generic_b.<>
+    replace-symbol: <>
+    source-key: [id]
+    primary-keys: [id]
+    include-all: true
