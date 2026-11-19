@@ -1,0 +1,110 @@
+# Local PostgreSQL fixture; production MySQL/StarRocks endpoints are not copied.
+api-version: pgflo/v1
+kind: ReplicationJob
+metadata: {name: inventory-wms-lab}
+source:
+  type: postgres
+  id: inventory-wms-lab
+  host: 127.0.0.1
+  port: 55442
+  database: source_db
+  user: postgres
+  password: pgflo_lab
+  schema: public
+  tables: [inventory_summary_outbox, sys_warehouse_outbound_1, sys_warehouse_outbound_1_history, thd_warehouse_outbound, mem_supplier_warehouse_outbound, sys_warehouse_outbound_product_bo_sn_1, sys_warehouse_outbound_tracking_1, mem_customer_tracking]
+  group: inventory_wms_lab
+  mode: stream
+  filter-replication-origins: true
+nats: {url: 'nats://127.0.0.1:4232', max-age: 0s, replicas: 1}
+sink:
+  type: postgres
+  host: 127.0.0.1
+  port: 55443
+  database: target_db
+  user: postgres
+  password: pgflo_lab
+  replication-origin: pgflo_inventory_wms_lab
+worker: {batch-size: 100, flush-interval: 200ms, max-deliver: 20}
+mapping:
+  version: inventory-wms-v1
+  source-id: inventory-wms-lab
+  unmatched: error
+  loop-protection: true
+  routes:
+    # The pgcat inventory case emits this outbox after warehouse mapping and
+    # three-table aggregation. Here it is the input contract, not a JOIN.
+    - id: inventory-on-hand
+      mode: vertical
+      sources: [public.inventory_summary_outbox]
+      target: inventory_rollback.mem_user_inventory
+      identity: {strategy: mapped, target-key: [uid, wh_id, upc], delete-policy: delete}
+      conflict: upsert
+      columns:
+        id: {source: summary_id}
+        uid: {source: owner_id}
+        wh_id: {source: legacy_wh_id}
+        upc: {source: upc}
+        quantity: {source: on_hand_qty, transforms: [{function: int32_exact}]}
+    - id: inventory-reserved
+      mode: vertical
+      sources: [public.inventory_summary_outbox]
+      target: inventory_rollback.mem_user_inventory_lock
+      identity: {strategy: mapped, target-key: [uid, wh_id, upc], delete-policy: delete}
+      conflict: upsert
+      columns:
+        id: {source: summary_id}
+        uid: {source: owner_id}
+        wh_id: {source: legacy_wh_id}
+        upc: {source: upc}
+        quantity: {source: reserved_qty, transforms: [{function: int32_exact}]}
+    - id: inventory-hold
+      mode: vertical
+      sources: [public.inventory_summary_outbox]
+      target: inventory_rollback.mem_user_inventory_tracking
+      identity: {strategy: mapped, target-key: [uid, wh_id, upc], delete-policy: delete}
+      conflict: upsert
+      columns:
+        id: {source: summary_id}
+        uid: {source: owner_id}
+        wh_id: {source: legacy_wh_id}
+        upc: {source: upc}
+        quantity: {source: hold_qty, transforms: [{function: int32_exact}]}
+    - id: outbound-four-source-merge
+      mode: merge
+      source-patterns: ['^public\.(sys_warehouse_outbound_[0-9]+(_history)?|thd_warehouse_outbound|mem_supplier_warehouse_outbound)$']
+      target: store.sys_warehouse_outbound_m
+      identity: {strategy: source, source-key: [outbound_id]}
+      conflict: upsert
+      columns:
+        outbound_id: {source: outbound_id}
+        _pk_id: {source: outbound_id, transforms: [{function: source_table_key}]}
+        wh_type: {source: outbound_id, transforms: [{function: warehouse_type}]}
+    - id: product-serial-composite-key
+      mode: merge
+      source-patterns: ['^public\.sys_warehouse_outbound_product_bo_sn_[0-9]+(_history)?$']
+      target: store.sys_warehouse_outbound_product_bo_sn_m
+      identity: {strategy: source, source-key: [outbound_id, upc, bo_sn]}
+      conflict: upsert
+      columns:
+        _pk_id: {source: outbound_id, transforms: [{function: source_table_key}]}
+        upc: {source: upc}
+        bo_sn: {source: bo_sn}
+        quantity: {source: quantity}
+    - id: tracking-delete-flag-key
+      mode: merge
+      source-patterns: ['^public\.sys_warehouse_outbound_tracking_[0-9]+(_history)?$']
+      target: store.sys_warehouse_outbound_tracking_m
+      identity: {strategy: source, source-key: [outbound_id, tracking_number, delete]}
+      conflict: upsert
+      columns:
+        _pk_id: {source: outbound_id, transforms: [{function: source_table_key}]}
+        tracking_number: {source: tracking_number}
+        delete: {source: delete}
+    - id: tracking-json-outbound-id
+      sources: [public.mem_customer_tracking]
+      target: store.mem_customer_tracking
+      identity: {strategy: source, source-key: [id]}
+      conflict: upsert
+      columns:
+        id: {source: id}
+        outbound_id: {source: param, transforms: [{function: json_get, args: [outbound_id]}, {function: to_int64}]}

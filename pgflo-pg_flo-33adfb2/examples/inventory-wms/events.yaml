@@ -1,0 +1,53 @@
+events:
+  - operation: INSERT
+    transaction-id: inventory-create
+    schema: public
+    table: inventory_summary_outbox
+    after: {summary_id: 101, owner_id: 0, legacy_wh_id: WH-A, upc: UPC-1, on_hand_qty: '20.000000', reserved_qty: '4.000000', hold_qty: '2.000000'}
+  - operation: UPDATE
+    transaction-id: inventory-warehouse-change
+    schema: public
+    table: inventory_summary_outbox
+    before: {summary_id: 101, owner_id: 0, legacy_wh_id: WH-A, upc: UPC-1, on_hand_qty: '20.000000', reserved_qty: '4.000000', hold_qty: '2.000000'}
+    after: {summary_id: 101, owner_id: 0, legacy_wh_id: WH-B, upc: UPC-1, on_hand_qty: '-2.000000', reserved_qty: '-1.000000', hold_qty: '0.000000'}
+  - operation: INSERT
+    transaction-id: outbound-current
+    schema: public
+    table: sys_warehouse_outbound_1
+    after: {outbound_id: 7}
+  - operation: INSERT
+    transaction-id: outbound-history
+    schema: public
+    table: sys_warehouse_outbound_1_history
+    after: {outbound_id: 7}
+  - operation: INSERT
+    transaction-id: outbound-supplier
+    schema: public
+    table: mem_supplier_warehouse_outbound
+    after: {outbound_id: 7}
+  - operation: INSERT
+    transaction-id: outbound-thd
+    schema: public
+    table: thd_warehouse_outbound
+    after: {outbound_id: 7}
+  - operation: INSERT
+    transaction-id: serial-a
+    schema: public
+    table: sys_warehouse_outbound_product_bo_sn_1
+    after: {outbound_id: 7, upc: UPC-1, bo_sn: SN-A, quantity: 1}
+  - operation: INSERT
+    transaction-id: serial-b
+    schema: public
+    table: sys_warehouse_outbound_product_bo_sn_1
+    after: {outbound_id: 7, upc: UPC-1, bo_sn: SN-B, quantity: 2}
+  - operation: UPDATE
+    transaction-id: tracking-soft-delete
+    schema: public
+    table: sys_warehouse_outbound_tracking_1
+    before: {outbound_id: 7, tracking_number: TRACK-1, delete: 0}
+    after: {outbound_id: 7, tracking_number: TRACK-1, delete: 1}
+  - operation: INSERT
+    transaction-id: json-large-id
+    schema: public
+    table: mem_customer_tracking
+    after: {id: 1, param: '{"outbound_id":9007199254740993,"other":"preserve"}'}

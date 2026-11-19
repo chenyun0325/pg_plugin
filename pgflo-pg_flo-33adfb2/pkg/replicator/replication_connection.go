@@ -26,12 +26,7 @@ func NewReplicationConnection(config Config) ReplicationConnection {
 
 // Connect establishes a connection to the PostgreSQL database for replication.
 func (rc *PostgresReplicationConnection) Connect(ctx context.Context) error {
-	config, err := pgx.ParseConfig(fmt.Sprintf("host=%s port=%d dbname=%s user=%s password=%s",
-		rc.Config.Host,
-		rc.Config.Port,
-		rc.Config.Database,
-		rc.Config.User,
-		rc.Config.Password))
+	config, err := pgx.ParseConfig(rc.Config.ConnectionString())
 	if err != nil {
 		return fmt.Errorf("failed to parse connection config: %v", err)
 	}

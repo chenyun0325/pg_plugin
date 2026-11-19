@@ -1,7 +1,8 @@
 #Requires -Version 7.5
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][string]$Pgcat,
+    [string]$Pgcat,
+    [string]$PgFlo,
     [Parameter(Mandatory)][string]$PgSinkJar,
     [Parameter(Mandatory)][string]$MysqlSinkJar,
     [string]$Psql = 'psql',
@@ -18,7 +19,9 @@ if (!$RunDirectory) {
 }
 if (Test-Path -LiteralPath $RunDirectory) { throw 'Use a new directory for offsets and logs.' }
 $run = (New-Item -ItemType Directory -Path $RunDirectory).FullName
-$Pgcat = (Resolve-Path -LiteralPath $Pgcat).Path
+if ($PgFlo) { $PgFlo=(Resolve-Path -LiteralPath $PgFlo).Path }
+elseif ($Pgcat) { $Pgcat = (Resolve-Path -LiteralPath $Pgcat).Path }
+else { throw 'Pass -Pgcat or -PgFlo' }
 $PgSinkJar = (Resolve-Path -LiteralPath $PgSinkJar).Path
 $MysqlSinkJar = (Resolve-Path -LiteralPath $MysqlSinkJar).Path
 $Java = (Get-Command $Java).Source
@@ -123,6 +126,10 @@ function Set-Ownership([string]$Node, [string]$SetClause, [string]$Guard) {
     else { Assert-Value "CAS $Node" (Pg "uid_$Node" "$statement RETURNING uid;") 1 }
 }
 function Drain([string]$Old, [int]$Epoch, [string]$Barrier) {
+    if ($PgFlo) {
+        & (Join-Path $lab '../pgflo-pg_flo-33adfb2/examples/uid-replay/Switch-Uid.ps1') -PgFlo $PgFlo -Psql $Psql -Mysql $Mysql -Writer $Old -Epoch $Epoch -Uid 1 -Barrier $Barrier
+        return
+    }
     $new = if ($Old -eq 'MYSQL') { 'PG' } else { 'MYSQL' }
     $writer = if ($Old -eq 'MYSQL') { 'mysql' } else { 'merged' }
     $nextWriter = if ($new -eq 'PG') { 'merged' } else { 'mysql' }
@@ -168,9 +175,15 @@ try {
             '-f',(Join-Path $lab 'sql/postgres-meta.sql'),'-f',(Join-Path $lab "sql/$node-fixture.sql"))
     }
     foreach ($direction in @('forward','reverse')) {
-        $config = Join-Path $lab "config/pgcat-$direction.yaml"
-        $null = Native $Pgcat @('init','--config',$config)
-        Start-Worker "pgcat-$direction" $Pgcat @('run','--config',$config)
+        if ($PgFlo) {
+            $config=Join-Path $lab "../pgflo-pg_flo-33adfb2/examples/uid-replay/$direction.yaml"
+            $null=Native $PgFlo @('job','setup','--job',$config)
+            Start-Worker "pgcat-$direction" $PgFlo @('job','run','--job',$config)
+        } else {
+            $config = Join-Path $lab "config/pgcat-$direction.yaml"
+            $null = Native $Pgcat @('init','--config',$config)
+            Start-Worker "pgcat-$direction" $Pgcat @('run','--config',$config)
+        }
     }
     Start-PgSource
     Start-MysqlSource
@@ -253,7 +266,53 @@ try {
     Assert-Value 'duplicate source position did not issue DML' (Pg uid_mirror "SELECT count(*) FROM cdc_meta.tx_context WHERE root_tx_id='tx-failure-replay'") 1
     Write-Host 'PASS stale source offset replay deduplicated'
 
-    $null = My "START TRANSACTION; CALL cdc_meta.begin_mysql_write('inventory',1,3,'tx-mixed-uid');
+    $testEpoch=3
+    if ($PgFlo) {
+        Stop-Worker pgcat-forward
+        $null=Pg uid_merged 'ALTER TABLE inventory_projection.parts ADD CONSTRAINT pgflo_atomic CHECK(qty<3000)'
+        $null=My "START TRANSACTION; CALL cdc_meta.begin_mysql_write('inventory',1,3,'tx-pgflo-failure');
+            UPDATE inventory_legacy.stock SET qty=411 WHERE uid=1;
+            UPDATE inventory_legacy.reserved SET qty=3000 WHERE uid=1; COMMIT"
+        Wait-For 'upstream two-table transaction received' {MirrorStock} '411,3000,203,204'
+        $forward=Join-Path $lab '../pgflo-pg_flo-33adfb2/examples/uid-replay/forward.yaml'
+        Start-Worker pgcat-forward $PgFlo @('job','run','--job',$forward)
+        Wait-For 'pg_flo stops at failing transaction' {$workers['pgcat-forward'].HasExited} 'True'
+        if (!(Select-String -Quiet -SimpleMatch 'pgflo_atomic' (Join-Path $run 'pgcat-forward.err'))) {
+            throw 'Expected pg_flo target constraint in failing worker log'
+        }
+        Copy-Item (Join-Path $run 'pgcat-forward.err') (Join-Path $run 'pgflo-constraint-failure.err')
+        Assert-Value 'pg_flo first output rolled back' (Summary) '401,2000,203,204'
+        Assert-Value 'pg_flo failed marker rolled back' (Pg uid_merged "SELECT count(*) FROM cdc_meta.tx_context WHERE root_tx_id='tx-pgflo-failure'") 0
+        $null=My "START TRANSACTION; CALL cdc_meta.begin_mysql_write('inventory',1,3,'tx-after-pgflo-failure');
+            UPDATE inventory_legacy.hold SET qty=212 WHERE uid=1; COMMIT"
+        Wait-For 'later transaction queued' {MirrorStock} '411,3000,212,204'
+        $null=Pg uid_merged 'ALTER TABLE inventory_projection.parts DROP CONSTRAINT pgflo_atomic'
+        Start-Worker pgcat-forward $PgFlo @('job','run','--job',$forward)
+        Wait-For 'pg_flo repaired transaction then later transaction' {Summary} '411,3000,212,204'
+        Assert-Value 'pg_flo recovered transaction applied once' (Pg uid_merged "SELECT count(*) FROM cdc_meta.tx_context WHERE root_tx_id='tx-pgflo-failure'") 1
+        Write-Host 'PASS pg_flo atomic rollback, ordered NATS retry and worker restart'
+
+        Drain MYSQL 3 barrier-mysql-3
+        $null=Pg uid_merged "BEGIN; SELECT cdc_meta.begin_write('inventory',1,'PG',4,'tx-pg-second-switch');
+            UPDATE inventory_app.summary SET stock_qty=601,reserved_qty=602,hold_qty=603,available_qty=604 WHERE uid=1; COMMIT"
+        Wait-For 'second PG ownership activation' {MysqlStock} '601,602,603,604'
+        Drain PG 4 barrier-pg-4
+        # Retrying the identical barrier is idempotent; a new barrier at epoch 4
+        # cannot be substituted for the recorded transition.
+        Drain PG 4 barrier-pg-4
+        $null=My "START TRANSACTION; CALL cdc_meta.begin_mysql_write('inventory',1,5,'tx-mysql-second-switch');
+            UPDATE inventory_legacy.stock SET qty=401 WHERE uid=1;
+            UPDATE inventory_legacy.reserved SET qty=2000 WHERE uid=1;
+            UPDATE inventory_legacy.hold SET qty=203 WHERE uid=1;
+            UPDATE inventory_legacy.available SET qty=204 WHERE uid=1; COMMIT"
+        Wait-For 'second MySQL ownership activation' {Summary} '401,2000,203,204'
+        Assert-Value 'UID 2 independent after four cutovers' (Summary 2) '20,21,22,24'
+        Assert-Value 'all four cutovers recorded' (Pg uid_merged "SELECT count(*) FROM pgflo_meta.cutover_history WHERE scope_namespace='inventory' AND uid=1") 4
+        $testEpoch=5
+        Write-Host 'PASS MYSQL1 -> PG2 -> MYSQL3 -> PG4 -> MYSQL5 and idempotent controller retry'
+    }
+
+    $null = My "START TRANSACTION; CALL cdc_meta.begin_mysql_write('inventory',1,$testEpoch,'tx-mixed-uid');
         UPDATE inventory_legacy.stock SET qty=501 WHERE uid=1;
         UPDATE inventory_legacy.stock SET qty=502 WHERE uid=2; COMMIT"
     Wait-For 'source stopped for mixed UID' { $workers['mysql-to-mirror'].HasExited } 'True'

@@ -1,6 +1,7 @@
 package mapping
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -30,6 +31,7 @@ type projection struct {
 	values       map[string]interface{}
 	keyColumns   []string
 	keySignature string
+	patches      map[string][]utils.JSONPatchValue
 }
 
 func NewEngine(config Config) (*Engine, error) {
@@ -38,6 +40,7 @@ func NewEngine(config Config) (*Engine, error) {
 	}
 	e := &Engine{config: config, functions: make(map[string]Function)}
 	e.registerBuiltins()
+	e.registerExtensions()
 	return e, nil
 }
 
@@ -54,7 +57,30 @@ func (e *Engine) Register(name string, function Function) error {
 	return nil
 }
 
+// ValidateFunctions is called after compiled extensions are registered. Engines
+// embedded directly may instead call Register before this validation.
+func (e *Engine) ValidateFunctions() error {
+	for _, declaration := range e.config.Functions {
+		if _, ok := e.functions[declaration.Name]; !ok {
+			return fmt.Errorf("unregistered function %s", declaration.Name)
+		}
+	}
+	for _, route := range e.config.Routes {
+		for column, projection := range route.Columns {
+			for _, transform := range projection.Transforms {
+				if _, ok := e.functions[transform.Function]; !ok {
+					return fmt.Errorf("route %s column %s has unregistered function %s", route.ID, column, transform.Function)
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func (e *Engine) registerBuiltins() {
+	e.functions["int32_exact"] = int32Exact
+	e.functions["source_table_key"] = sourceTableKey
+	e.functions["warehouse_type"] = warehouseType
 	e.functions["json_get"] = jsonGet
 	e.functions["to_string"] = func(_ TransformContext, value interface{}, _ []string) (interface{}, error) {
 		if value == nil {
@@ -174,6 +200,14 @@ func (e *Engine) Map(message *utils.CDCMessage) ([]*utils.CDCMessage, error) {
 			continue
 		}
 		matchedSource = true
+		if route.TargetFrom == "lineage" && before != nil && after != nil {
+			trace := route.Identity.LineageColumns
+			for _, key := range []string{trace.Source, trace.Table, trace.Key} {
+				if fmt.Sprint(before[key]) != fmt.Sprint(after[key]) {
+					return nil, fmt.Errorf("route %s protected lineage changed: %s", route.ID, key)
+				}
+			}
+		}
 		oldProjection, err := e.project(route, sourceTable, before, message, true)
 		if err != nil {
 			return nil, err
@@ -231,6 +265,33 @@ func (e *Engine) project(route *RouteConfig, sourceTable string, row map[string]
 	if !match {
 		return nil, nil
 	}
+	row = cloneMap(row)
+	lineage := route.Identity.LineageColumns
+	if original, ok := row[lineage.Table].(string); ok && original != "" {
+		if route.TargetFrom == "lineage" {
+			if !contains(route.AllowedTargets, original) {
+				return nil, fmt.Errorf("lineage target %s is not allowed", original)
+			}
+			resolved := *route
+			resolved.Target = original
+			route = &resolved
+		}
+		var keys []interface{}
+		pk, ok := row[lineage.Key].(string)
+		if !ok {
+			return nil, fmt.Errorf("missing lineage PK")
+		}
+		decoder := json.NewDecoder(bytes.NewBufferString(pk))
+		decoder.UseNumber()
+		if err := decoder.Decode(&keys); err != nil {
+			return nil, err
+		}
+		for i, key := range keys {
+			row[fmt.Sprintf("__owner_pk_%d", i)] = key
+		}
+	} else if route.TargetFrom != "" {
+		return nil, fmt.Errorf("lineage required for reverse routing")
+	}
 
 	values := make(map[string]interface{})
 	keyColumns := append([]string(nil), route.Identity.TargetKey...)
@@ -258,6 +319,15 @@ func (e *Engine) project(route *RouteConfig, sourceTable string, row map[string]
 		values[lineage.Source] = e.config.SourceID
 		values[lineage.Table] = sourceTable
 		values[lineage.Key] = string(encoded)
+		if origin, ok := row[lineage.Source]; ok && origin != nil {
+			for _, column := range []string{lineage.Source, lineage.Table, lineage.Key} {
+				v, ok := row[column].(string)
+				if !ok || v == "" {
+					return nil, fmt.Errorf("incomplete protected lineage")
+				}
+				values[column] = v
+			}
+		}
 		keyColumns = []string{lineage.Source, lineage.Table, lineage.Key}
 	}
 
@@ -266,6 +336,9 @@ func (e *Engine) project(route *RouteConfig, sourceTable string, row map[string]
 			continue
 		}
 		value, ok := row[column.Source]
+		if column.Literal != nil {
+			value, ok = column.Literal, true
+		}
 		if column.Source == "*" {
 			value, ok = cloneMap(row), true
 		}
@@ -292,7 +365,7 @@ func (e *Engine) project(route *RouteConfig, sourceTable string, row map[string]
 		values[target] = value
 	}
 	for _, key := range keyColumns {
-		if _, ok := values[key]; !ok {
+		if value, ok := values[key]; !ok || value == nil {
 			return nil, fmt.Errorf("route %s target key %s cannot be derived from row image", route.ID, key)
 		}
 	}
@@ -304,7 +377,19 @@ func (e *Engine) project(route *RouteConfig, sourceTable string, row map[string]
 	if err != nil {
 		return nil, err
 	}
-	return &projection{route: route, values: values, keyColumns: keyColumns, keySignature: string(encodedKey)}, nil
+	patches := map[string][]utils.JSONPatchValue{}
+	if !keysOnly {
+		for column, list := range route.JSONPatches {
+			for _, patch := range list {
+				value, ok := row[patch.Source]
+				if !ok {
+					return nil, fmt.Errorf("missing JSON patch source %s", patch.Source)
+				}
+				patches[column] = append(patches[column], utils.JSONPatchValue{Path: append([]string(nil), patch.Path...), Value: cloneValue(value)})
+			}
+		}
+	}
+	return &projection{route: route, values: values, keyColumns: keyColumns, keySignature: string(encodedKey), patches: patches}, nil
 }
 
 func (e *Engine) diff(input *utils.CDCMessage, sourceTable string, oldProjection, newProjection *projection) []*utils.CDCMessage {
@@ -347,22 +432,24 @@ func mappedMessage(input *utils.CDCMessage, sourceID, sourceTable string, p *pro
 		transactionID = "snapshot/" + sourceTable + "/" + p.keySignature
 	}
 	return &utils.CDCMessage{
-		Type:           operation,
-		Schema:         parts[0],
-		Table:          parts[1],
-		Columns:        columns,
-		Values:         cloneMap(values),
-		OldValues:      cloneMap(oldValues),
-		ReplicationKey: utils.ReplicationKey{Type: utils.ReplicationKeyPK, Columns: append([]string(nil), p.keyColumns...)},
-		LSN:            input.LSN,
-		EmittedAt:      input.EmittedAt,
-		SourceID:       sourceID,
-		SourceTable:    sourceTable,
-		SourceKey:      p.keySignature,
-		TransactionID:  transactionID,
-		MappingVersion: input.MappingVersion,
-		ConflictAction: utils.ConflictAction(p.route.Conflict),
-		ToastedColumns: map[string]bool{},
+		Type:            operation,
+		Schema:          parts[0],
+		Table:           parts[1],
+		Columns:         columns,
+		Values:          cloneMap(values),
+		OldValues:       cloneMap(oldValues),
+		ReplicationKey:  utils.ReplicationKey{Type: utils.ReplicationKeyPK, Columns: append([]string(nil), p.keyColumns...)},
+		LSN:             input.LSN,
+		EmittedAt:       input.EmittedAt,
+		SourceID:        sourceID,
+		SourceTable:     sourceTable,
+		SourceKey:       p.keySignature,
+		TransactionID:   transactionID,
+		MappingVersion:  input.MappingVersion,
+		ConflictAction:  utils.ConflictAction(p.route.Conflict),
+		JSONPatches:     p.patches,
+		RequireExisting: p.route.RequireExisting || len(p.patches) > 0,
+		ToastedColumns:  map[string]bool{},
 	}
 }
 

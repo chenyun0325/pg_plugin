@@ -132,6 +132,12 @@ func (w *Worker) Start(ctx context.Context) error {
 		AckWait:       25 * time.Minute,
 		DeliverPolicy: nats.DeliverAllPolicy,
 	}
+	if _, replay := w.sink.(sinks.EnvelopeSink); replay {
+		// A failed transaction must block every later delivery, including after
+		// a restart. Unlimited redelivery keeps poison transactions visible.
+		consumerConfig.MaxAckPending = 1
+		consumerConfig.MaxDeliver = -1
+	}
 
 	_, err := js.AddConsumer(stream, consumerConfig)
 	if err != nil && !errors.Is(err, nats.ErrConsumerNameAlreadyInUse) {
@@ -150,6 +156,10 @@ func (w *Worker) Start(ctx context.Context) error {
 	go func() {
 		defer w.wg.Done()
 		if err := w.processMessages(ctx, sub); err != nil && err != context.Canceled {
+			// Sink failures happen at flush time, after processMessage returned.
+			// Release these deliveries now instead of leaving them in-flight for
+			// the 25-minute AckWait after the ordered worker exits.
+			w.nakBuffered()
 			w.logger.Error().Err(err).Msg("Error processing messages")
 			errCh <- err
 		}
@@ -170,6 +180,10 @@ func (w *Worker) Start(ctx context.Context) error {
 
 // processMessages continuously processes messages from the NATS consumer.
 func (w *Worker) processMessages(ctx context.Context, sub *nats.Subscription) error {
+	fetchSize := w.batchSize
+	if _, replay := w.sink.(sinks.EnvelopeSink); replay {
+		fetchSize = 1
+	}
 	flushTicker := time.NewTicker(w.flushInterval)
 	defer flushTicker.Stop()
 
@@ -184,17 +198,20 @@ func (w *Worker) processMessages(ctx context.Context, sub *nats.Subscription) er
 				return err
 			}
 		default:
-			msgs, err := sub.Fetch(w.batchSize, nats.MaxWait(1*time.Second))
+			msgs, err := sub.Fetch(fetchSize, nats.MaxWait(1*time.Second))
 			if err != nil && !errors.Is(err, nats.ErrTimeout) {
 				w.logger.Error().Err(err).Msg("Error fetching messages")
 				continue
 			}
 
-			for _, msg := range msgs {
+			for index, msg := range msgs {
 				if err := w.processMessage(msg); err != nil {
 					w.logger.Error().Err(err).Msg("Failed to process message")
 					if nakErr := msg.NakWithDelay(5 * time.Second); nakErr != nil {
 						w.logger.Error().Err(nakErr).Msg("Failed to NAK failed message")
+					}
+					for _, pending := range msgs[index+1:] {
+						_ = pending.NakWithDelay(5 * time.Second)
 					}
 					return fmt.Errorf("ordered stream stopped on failed message: %w", err)
 				}
@@ -209,6 +226,16 @@ func (w *Worker) processMessages(ctx context.Context, sub *nats.Subscription) er
 	}
 }
 
+func (w *Worker) nakBuffered() {
+	for _, message := range w.ackBuffer {
+		if err := message.NakWithDelay(5 * time.Second); err != nil {
+			w.logger.Error().Err(err).Msg("Failed to release buffered delivery after sink failure")
+		}
+	}
+	w.buffer = w.buffer[:0]
+	w.ackBuffer = w.ackBuffer[:0]
+}
+
 // processMessage handles a single message, applying rules, writing to the sink, and updating the last processed sequence.
 func (w *Worker) processMessage(msg *nats.Msg) error {
 	metadata, err := msg.Metadata()
@@ -221,6 +248,15 @@ func (w *Worker) processMessage(msg *nats.Msg) error {
 	if err != nil {
 		w.logger.Error().Err(err).Msg("Failed to unmarshal message")
 		return err
+	}
+	if transactional, ok := w.sink.(sinks.EnvelopeSink); ok {
+		if err := transactional.WriteEnvelope(envelope); err != nil {
+			return err
+		}
+		return msg.AckSync()
+	}
+	if envelope.Version >= 2 {
+		return fmt.Errorf("UID replay envelope requires a replay-v2 sink; refusing unguarded application")
 	}
 	var mapped []*utils.CDCMessage
 	for i := range envelope.Messages {
@@ -255,7 +291,7 @@ func (w *Worker) processMessage(msg *nats.Msg) error {
 func decodeEnvelope(data []byte) (utils.CDCEnvelope, error) {
 	var envelope utils.CDCEnvelope
 	if err := gob.NewDecoder(bytes.NewReader(data)).Decode(&envelope); err == nil && envelope.Version > 0 {
-		if len(envelope.Messages) == 0 {
+		if len(envelope.Messages) == 0 && envelope.Version != 2 {
 			return envelope, fmt.Errorf("empty CDC envelope")
 		}
 		return envelope, nil

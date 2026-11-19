@@ -54,7 +54,7 @@ func NewPostgresSink(targetHost string, targetPort int, targetDBName, targetUser
 }
 
 func NewPostgresSinkWithConfig(config PostgresSinkConfig) (*PostgresSink, error) {
-	connConfig, err := pgx.ParseConfig(fmt.Sprintf("host=%s port=%d dbname=%s user=%s password=%s", config.TargetHost, config.TargetPort, config.TargetDBName, config.TargetUser, config.TargetPassword))
+	connConfig, err := pgx.ParseConfig(utils.PostgresURL(config.TargetHost, config.TargetPort, config.TargetDBName, config.TargetUser, config.TargetPassword))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse connection config: %v", err)
 	}
@@ -524,9 +524,17 @@ func (s *PostgresSink) writeBatchInternal(ctx context.Context, messages []*utils
 
 			switch message.Type {
 			case utils.OperationInsert:
-				operationErr = s.handleInsert(tx, message)
+				if message.RequireExisting || len(message.JSONPatches) > 0 {
+					operationErr = s.applyProjection(ctx, tx, message)
+				} else {
+					operationErr = s.handleInsert(tx, message)
+				}
 			case utils.OperationUpdate:
-				operationErr = s.handleUpdate(tx, message)
+				if message.RequireExisting || len(message.JSONPatches) > 0 {
+					operationErr = s.applyProjection(ctx, tx, message)
+				} else {
+					operationErr = s.handleUpdate(tx, message)
+				}
 			case utils.OperationDelete:
 				operationErr = s.handleDelete(tx, message)
 			case utils.OperationDDL:

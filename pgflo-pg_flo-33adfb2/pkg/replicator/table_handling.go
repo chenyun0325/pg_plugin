@@ -3,12 +3,17 @@ package replicator
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/pgflo/pg_flo/pkg/utils"
 )
 
 // AddPrimaryKeyInfo adds replication key information to the CDCMessage
 func (r *BaseReplicator) AddPrimaryKeyInfo(message *utils.CDCMessage, table string) {
+	if key, ok := r.TableReplicationKeys[message.Schema+"."+message.Table]; ok {
+		message.ReplicationKey = key
+		return
+	}
 	if key, ok := r.TableReplicationKeys[table]; ok {
 		message.ReplicationKey = key
 	} else {
@@ -20,6 +25,9 @@ func (r *BaseReplicator) AddPrimaryKeyInfo(message *utils.CDCMessage, table stri
 
 // InitializePrimaryKeyInfo initializes primary key information for all tables
 func (r *BaseReplicator) InitializePrimaryKeyInfo() error {
+	if r.Config.CaptureContext {
+		return r.initializeReplayKeys()
+	}
 	query := `
 		WITH table_info AS (
 			SELECT
@@ -121,7 +129,11 @@ func (r *BaseReplicator) GetConfiguredTables(ctx context.Context) ([]string, err
 	if len(r.Config.Tables) > 0 {
 		fullyQualifiedTables := make([]string, len(r.Config.Tables))
 		for i, table := range r.Config.Tables {
-			fullyQualifiedTables[i] = fmt.Sprintf("%s.%s", r.Config.Schema, table)
+			if strings.Contains(table, ".") {
+				fullyQualifiedTables[i] = table
+			} else {
+				fullyQualifiedTables[i] = fmt.Sprintf("%s.%s", r.Config.Schema, table)
+			}
 		}
 		return fullyQualifiedTables, nil
 	}
@@ -147,6 +159,38 @@ func (r *BaseReplicator) GetConfiguredTables(ctx context.Context) ([]string, err
 	}
 
 	return tables, nil
+}
+
+func (r *BaseReplicator) initializeReplayKeys() error {
+	r.TableReplicationKeys = make(map[string]utils.ReplicationKey)
+	tables, err := r.GetConfiguredTables(context.Background())
+	if err != nil {
+		return err
+	}
+	for _, table := range tables {
+		parts := strings.Split(table, ".")
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid source table %s", table)
+		}
+		var keys []string
+		var identity string
+		err := r.StandardConn.QueryRow(context.Background(), `SELECT c.relreplident::text,
+ ARRAY(SELECT a.attname FROM pg_index i CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY k(attnum,n)
+ JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=k.attnum
+ WHERE i.indrelid=c.oid AND i.indisprimary ORDER BY k.n)
+ FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1 AND c.relname=$2`, parts[0], parts[1]).Scan(&identity, &keys)
+		if err != nil {
+			return err
+		}
+		if len(keys) == 0 {
+			return fmt.Errorf("replay source %s needs a primary key", table)
+		}
+		if table != "cdc_meta.tx_context" && identity != "f" {
+			return fmt.Errorf("replay source %s needs REPLICA IDENTITY FULL", table)
+		}
+		r.TableReplicationKeys[table] = utils.ReplicationKey{Type: utils.ReplicationKeyPK, Columns: keys}
+	}
+	return nil
 }
 
 func (r *BaseReplicator) validateTableReplicationKey(tableName string, key utils.ReplicationKey) error {

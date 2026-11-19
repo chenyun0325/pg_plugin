@@ -1,0 +1,22 @@
+events:
+  - operation: UPDATE
+    schema: app
+    table: orders
+    key-columns: [id]
+    transaction-id: preview-json-1
+    before:
+      id: 42
+      uid: 0
+      payload: '{"customer":{"name":" Alice "}}'
+      reserved_qty: 4
+      _pgflo_source: mysql-wms
+      _pgflo_source_table: legacy.orders_1
+      _pgflo_source_pk: '[9007199254740993]'
+    after:
+      id: 42
+      uid: 0
+      payload: '{"customer":{"name":" Bob "}}'
+      reserved_qty: 7
+      _pgflo_source: mysql-wms
+      _pgflo_source_table: legacy.orders_1
+      _pgflo_source_pk: '[9007199254740993]'

@@ -1,0 +1,55 @@
+api-version: pgflo/v1
+kind: ReplicationJob
+metadata: {name: uid-forward}
+source:
+  id: inventory_mirror
+  host: 127.0.0.1
+  port: 56543
+  database: uid_mirror
+  user: postgres
+  password: ''
+  schema: inventory_legacy
+  tables: [stock, reserved, hold, available, cdc_meta.tx_context]
+  group: pgcat_forward
+  mode: stream
+  filter-replication-origins: false
+nats: {url: 'nats://127.0.0.1:4242', max-age: 0s, replicas: 1}
+sink:
+  host: 127.0.0.1
+  port: 56543
+  database: uid_merged
+  user: postgres
+  password: ''
+  replication-origin: inv_forward_origin
+replay-v2:
+  namespace: inventory
+  direction: forward
+  uid-field: uid
+  peer-origin: inv_reverse_origin
+  source-stream-id: mirror-pgflo-v1
+mapping:
+  version: uid-replay-v1
+  source-id: inventory_mirror
+  loop-protection: true
+  unmatched: error
+  routes:
+    - id: stock
+      sources: [inventory_legacy.stock]
+      target: inventory_projection.parts
+      identity: {strategy: mapped, target-key: [kind, id], delete-policy: delete}
+      columns: {kind: {literal: stock}, id: {source: id}, uid: {source: uid}, qty: {source: qty}}
+    - id: reserved
+      sources: [inventory_legacy.reserved]
+      target: inventory_projection.parts
+      identity: {strategy: mapped, target-key: [kind, id], delete-policy: delete}
+      columns: {kind: {literal: reserved}, id: {source: id}, uid: {source: uid}, qty: {source: qty}}
+    - id: hold
+      sources: [inventory_legacy.hold]
+      target: inventory_projection.parts
+      identity: {strategy: mapped, target-key: [kind, id], delete-policy: delete}
+      columns: {kind: {literal: hold}, id: {source: id}, uid: {source: uid}, qty: {source: qty}}
+    - id: available
+      sources: [inventory_legacy.available]
+      target: inventory_projection.parts
+      identity: {strategy: mapped, target-key: [kind, id], delete-policy: delete}
+      columns: {kind: {literal: available}, id: {source: id}, uid: {source: uid}, qty: {source: qty}}

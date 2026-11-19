@@ -106,7 +106,8 @@ func NewNATSClientWithOptions(url, stream, group string, options StreamOptions) 
 	if kvErr != nil {
 		if errors.Is(kvErr, nats.ErrBucketNotFound) {
 			_, err = js.CreateKeyValue(&nats.KeyValueConfig{
-				Bucket: stateBucket,
+				Bucket:   stateBucket,
+				Replicas: options.Replicas,
 			})
 			if err != nil {
 				return nil, fmt.Errorf("failed to create state bucket: %w", err)

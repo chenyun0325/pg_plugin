@@ -1,0 +1,45 @@
+api-version: pgflo/v1
+kind: ReplicationJob
+metadata: {name: uid-reverse}
+source:
+  id: inventory_merged
+  host: 127.0.0.1
+  port: 56543
+  database: uid_merged
+  user: postgres
+  password: ''
+  schema: inventory_app
+  tables: [summary, cdc_meta.tx_context]
+  group: pgcat_reverse
+  mode: stream
+  filter-replication-origins: false
+nats: {url: 'nats://127.0.0.1:4242', max-age: 0s, replicas: 1}
+sink:
+  host: 127.0.0.1
+  port: 56543
+  database: uid_mirror
+  user: postgres
+  password: ''
+  replication-origin: inv_reverse_origin
+replay-v2:
+  namespace: inventory
+  direction: reverse
+  uid-field: uid
+  peer-origin: inv_forward_origin
+  source-stream-id: merged-pgflo-v1
+mapping:
+  version: uid-replay-v1
+  source-id: inventory_merged
+  loop-protection: true
+  unmatched: error
+  routes:
+    - id: summary-delta
+      sources: [inventory_app.summary]
+      target: inventory_reverse.summary_delta
+      identity: {strategy: mapped, target-key: [uid], delete-policy: delete}
+      columns:
+        uid: {source: uid}
+        stock_qty: {source: stock_qty}
+        reserved_qty: {source: reserved_qty}
+        hold_qty: {source: hold_qty}
+        available_qty: {source: available_qty}

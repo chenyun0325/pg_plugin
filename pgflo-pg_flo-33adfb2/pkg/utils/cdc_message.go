@@ -49,13 +49,20 @@ type CDCMessage struct {
 	OldValues map[string]interface{}
 
 	// The following fields make target ownership and replay behaviour explicit.
-	SourceID       string
-	SourceTable    string
-	SourceKey      string
-	Origin         string
-	TransactionID  string
-	MappingVersion string
-	ConflictAction ConflictAction
+	SourceID        string
+	SourceTable     string
+	SourceKey       string
+	Origin          string
+	TransactionID   string
+	MappingVersion  string
+	ConflictAction  ConflictAction
+	JSONPatches     map[string][]JSONPatchValue
+	RequireExisting bool
+}
+
+type JSONPatchValue struct {
+	Path  []string
+	Value interface{}
 }
 
 // CDCEnvelope is the durable wire unit. A source transaction is published as
@@ -67,6 +74,21 @@ type CDCEnvelope struct {
 	CommitLSN      string
 	MappingVersion string
 	Messages       []CDCMessage
+	Origin         string
+	Context        *ReplayContext
+}
+
+// ReplayContext is captured in the SAME source transaction as business DML.
+// It is never inferred from the consumer's current ownership state.
+type ReplayContext struct {
+	MarkerID  string  `json:"marker_id"`
+	Namespace string  `json:"scope_namespace"`
+	RootID    string  `json:"root_tx_id"`
+	Writer    string  `json:"writer_side"`
+	Stage     string  `json:"apply_stage"`
+	UID       int64   `json:"uid"`
+	Epoch     int64   `json:"epoch"`
+	Barrier   *string `json:"barrier_id"`
 }
 
 // GetColumnIndex returns the index of a column by name, or -1 if not found

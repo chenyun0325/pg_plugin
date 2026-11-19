@@ -26,23 +26,19 @@ func (r *StreamReplicator) Start(ctx context.Context) error {
 
 	startLSN, err := r.GetLastState()
 	if err != nil {
+		if r.Config.CaptureContext {
+			return err
+		}
 		r.Logger.Warn().Err(err).Msg("Failed to get last LSN, starting from 0")
 		startLSN = pglogrepl.LSN(0)
 	}
+	r.LastLSN = startLSN
 
 	r.Logger.Info().Str("startLSN", startLSN.String()).Msg("Starting replication")
 
-	errChan := make(chan error, 1)
-	go func() {
-		errChan <- r.StartReplicationFromLSN(ctx, startLSN, r.stopChan)
-	}()
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case err := <-errChan:
-		return err
-	}
+	// Return only after the WAL reader has stopped. The caller may then close
+	// replication connections and persist the final position without racing it.
+	return r.StartReplicationFromLSN(ctx, startLSN, r.stopChan)
 }
 
 // Stop stops the stream replicator

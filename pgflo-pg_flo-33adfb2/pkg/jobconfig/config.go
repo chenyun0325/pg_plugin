@@ -2,6 +2,8 @@
 package jobconfig
 
 import (
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -10,6 +12,7 @@ import (
 	"time"
 
 	"github.com/pgflo/pg_flo/pkg/mapping"
+	"github.com/pgflo/pg_flo/pkg/replay"
 	"github.com/pgflo/pg_flo/pkg/replicator"
 	"github.com/pgflo/pg_flo/pkg/utils"
 	"gopkg.in/yaml.v2"
@@ -24,6 +27,7 @@ type Job struct {
 	Sink       Sink           `yaml:"sink" json:"sink"`
 	Worker     Worker         `yaml:"worker" json:"worker"`
 	Mapping    mapping.Config `yaml:"mapping" json:"mapping"`
+	Replay     *replay.Config `yaml:"replay-v2,omitempty"`
 }
 
 type Metadata struct {
@@ -180,7 +184,45 @@ func (j *Job) Validate() error {
 	if j.Sink.Host == "" || j.Sink.Database == "" || j.Sink.User == "" {
 		return fmt.Errorf("sink host, database, and user are required")
 	}
-	if j.Mapping.LoopProtection && (!j.Source.FilterReplicationOrigins || j.Sink.Origin == "") {
+	if j.Replay != nil {
+		if !regexp.MustCompile(`^[a-z][a-z0-9_]{0,43}$`).MatchString(j.Source.Group) {
+			return fmt.Errorf("replay-v2 source.group must use 1..44 lowercase letters, digits or underscores, starting with a letter")
+		}
+		seen := map[string]bool{}
+		for _, table := range j.Source.Tables {
+			if !strings.Contains(table, ".") {
+				table = j.Source.Schema + "." + table
+			}
+			parts := strings.Split(table, ".")
+			if len(parts) != 2 || parts[0] == "" || parts[1] == "" || seen[table] {
+				return fmt.Errorf("invalid/duplicate replay table %s", table)
+			}
+			seen[table] = true
+		}
+		source := j.Source
+		source.Password = ""
+		data, _ := json.Marshal(source)
+		j.Replay.CaptureSignature = fmt.Sprintf("%x", sha256.Sum256(data))
+		if err := j.Replay.Validate(j.Sink.Origin); err != nil {
+			return err
+		}
+		if j.Source.Mode != "stream" || j.Source.TrackDDL || j.Source.FilterReplicationOrigins {
+			return fmt.Errorf("replay-v2 requires stream, track-ddl=false and filter-replication-origins=false")
+		}
+		if maxAge, _ := time.ParseDuration(j.NATS.MaxAge); maxAge != 0 {
+			return fmt.Errorf("replay-v2 requires nats.max-age=0s to retain unacknowledged source transactions")
+		}
+		found := false
+		for _, table := range j.Source.Tables {
+			if table == replay.ContextTable {
+				found = true
+			}
+		}
+		if !found {
+			return fmt.Errorf("replay-v2 source.tables must include cdc_meta.tx_context")
+		}
+	}
+	if j.Replay == nil && j.Mapping.LoopProtection && (!j.Source.FilterReplicationOrigins || j.Sink.Origin == "") {
 		return fmt.Errorf("loop protection requires source.filter-replication-origins=true and sink.replication-origin")
 	}
 	if j.Worker.BatchSize < 1 || j.Worker.MaxDeliver < 1 {
@@ -190,10 +232,11 @@ func (j *Job) Validate() error {
 		return fmt.Errorf("worker.flush-interval: %w", err)
 	}
 	// NewEngine performs the mapping-specific strict validation.
-	if _, err := mapping.NewEngine(j.Mapping); err != nil {
+	engine, err := mapping.NewEngine(j.Mapping)
+	if err != nil {
 		return fmt.Errorf("mapping: %w", err)
 	}
-	return nil
+	return engine.ValidateFunctions()
 }
 
 func (j *Job) ReplicatorConfig() replicator.Config {
@@ -209,6 +252,7 @@ func (j *Job) ReplicatorConfig() replicator.Config {
 		TrackDDL:                 j.Source.TrackDDL,
 		FilterReplicationOrigins: j.Source.FilterReplicationOrigins,
 		MappingVersion:           j.Mapping.Version,
+		CaptureContext:           j.Replay != nil,
 		RetryConfig: utils.RetryConfig{
 			MaxAttempts: 3,
 			InitialWait: time.Second,

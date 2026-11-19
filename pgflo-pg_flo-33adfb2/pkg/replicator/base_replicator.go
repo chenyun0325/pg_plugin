@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
+	"github.com/pgflo/pg_flo/pkg/replay"
 	"github.com/pgflo/pg_flo/pkg/utils"
 	"github.com/rs/zerolog/log"
 )
@@ -52,6 +53,7 @@ type BaseReplicator struct {
 	currentTxBuffer      []utils.CDCMessage
 	currentTxLSN         pglogrepl.LSN
 	currentTxID          uint32
+	currentOrigin        string
 }
 
 // NewBaseReplicator creates a new BaseReplicator instance
@@ -255,6 +257,9 @@ func (r *BaseReplicator) reconnectAndStartReplication(ctx context.Context) error
 	slotStatusErr := r.CheckReplicationSlotStatus(ctx)
 	if slotStatusErr != nil {
 		if strings.Contains(slotStatusErr.Error(), "not found") {
+			if r.Config.CaptureContext {
+				return fmt.Errorf("replay source slot lost; restore or rebaseline under a new channel: %w", slotStatusErr)
+			}
 			r.Logger.Warn().Str("slotName", publicationName).Msg("Replication slot missing, attempting to recreate")
 			if err := r.CreateReplicationSlot(ctx); err != nil {
 				return fmt.Errorf("failed to recreate missing replication slot: %w", err)
@@ -423,6 +428,8 @@ func (r *BaseReplicator) processWALData(walData []byte, lsn pglogrepl.LSN) error
 		r.handleRelationMessage(msg)
 	case *pglogrepl.BeginMessage:
 		return r.HandleBeginMessage(msg)
+	case *pglogrepl.OriginMessage:
+		r.currentOrigin = msg.Name
 	case *pglogrepl.InsertMessage:
 		return r.HandleInsertMessage(msg, lsn)
 	case *pglogrepl.UpdateMessage:
@@ -431,6 +438,12 @@ func (r *BaseReplicator) processWALData(walData []byte, lsn pglogrepl.LSN) error
 		return r.HandleDeleteMessage(msg, lsn)
 	case *pglogrepl.CommitMessage:
 		return r.HandleCommitMessage(msg)
+	case *pglogrepl.TruncateMessage:
+		if r.Config.CaptureContext {
+			return fmt.Errorf("TRUNCATE is forbidden in UID replay channels; use owned row deletes")
+		}
+	case *pglogrepl.TypeMessage:
+		// pgoutput type metadata contains no business change.
 	default:
 		r.Logger.Warn().Type("message", msg).Msg("Received unexpected logical replication message")
 	}
@@ -449,6 +462,7 @@ func (r *BaseReplicator) HandleBeginMessage(msg *pglogrepl.BeginMessage) error {
 	r.currentTxBuffer = make([]utils.CDCMessage, 0)
 	r.currentTxLSN = msg.FinalLSN
 	r.currentTxID = msg.Xid
+	r.currentOrigin = ""
 	return nil
 }
 
@@ -541,6 +555,28 @@ func (r *BaseReplicator) HandleCommitMessage(msg *pglogrepl.CommitMessage) error
 		CommitLSN:      msg.CommitLSN.String(),
 		MappingVersion: r.Config.MappingVersion,
 		Messages:       r.currentTxBuffer,
+		Origin:         r.currentOrigin,
+	}
+	if r.Config.CaptureContext {
+		envelope.Version = 2
+		envelope.Messages = nil
+		for _, message := range r.currentTxBuffer {
+			if message.Schema+"."+message.Table == replay.ContextTable {
+				if envelope.Context != nil || message.Type != utils.OperationInsert {
+					return fmt.Errorf("exactly one append-only transaction context required")
+				}
+				row, err := message.RowValues(false)
+				if err != nil {
+					return err
+				}
+				envelope.Context, err = replay.ParseContext(row)
+				if err != nil {
+					return err
+				}
+			} else {
+				envelope.Messages = append(envelope.Messages, message)
+			}
+		}
 	}
 	if err := r.PublishEnvelopeToNATS(envelope); err != nil {
 		return fmt.Errorf("failed to publish transaction: %w", err)
@@ -661,8 +697,10 @@ func (r *BaseReplicator) GracefulShutdown(ctx context.Context) error {
 		}
 	}
 
-	if err := r.SaveState(r.LastLSN); err != nil {
-		r.Logger.Warn().Err(err).Msg("Failed to save final state")
+	if !r.Config.CaptureContext || r.LastLSN != 0 {
+		if err := r.SaveState(r.LastLSN); err != nil {
+			r.Logger.Warn().Err(err).Msg("Failed to save final state")
+		}
 	}
 
 	if err := r.closeConnections(ctx); err != nil {
@@ -753,6 +791,18 @@ func (r *BaseReplicator) CheckReplicationSlotStatus(ctx context.Context) error {
 
 // Start creates the publication, replication slot, ddl tracking (if any) and starts the replication
 func (r *BaseReplicator) Start(ctx context.Context) error {
+	if r.Config.CaptureContext {
+		if err := r.initializeReplayKeys(); err != nil {
+			return err
+		}
+		exists, err := r.CheckReplicationSlotExists(GeneratePublicationName(r.Config.Group))
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return fmt.Errorf("replay slot missing; refusing to skip source history")
+		}
+	}
 	r.mu.Lock()
 	if r.started {
 		r.mu.Unlock()

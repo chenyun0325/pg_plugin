@@ -1,7 +1,6 @@
 package replicator
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/pgflo/pg_flo/pkg/utils"
@@ -20,6 +19,7 @@ type Config struct {
 	TrackDDL                 bool
 	FilterReplicationOrigins bool
 	MappingVersion           string
+	CaptureContext           bool
 	RetryConfig              utils.RetryConfig
 }
 
@@ -37,5 +37,5 @@ func (c Config) GetRetryConfig() utils.RetryConfig {
 
 // ConnectionString generates and returns a PostgreSQL connection string
 func (c Config) ConnectionString() string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s", c.User, c.Password, c.Host, c.Port, c.Database)
+	return utils.PostgresURL(c.Host, int(c.Port), c.Database, c.User, c.Password)
 }

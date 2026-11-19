@@ -1,0 +1,29 @@
+name: pgflo-inventory-wms-lab
+services:
+  source-db:
+    image: postgres:18
+    environment: {POSTGRES_DB: source_db, POSTGRES_USER: postgres, POSTGRES_PASSWORD: pgflo_lab}
+    command: [postgres, -c, wal_level=logical, -c, max_replication_slots=20, -c, max_wal_senders=20]
+    ports: ['127.0.0.1:55442:5432']
+    volumes: ['./source.sql:/docker-entrypoint-initdb.d/source.sql:ro']
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U postgres -d source_db']
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  target-db:
+    image: postgres:18
+    environment: {POSTGRES_DB: target_db, POSTGRES_USER: postgres, POSTGRES_PASSWORD: pgflo_lab}
+    command: [postgres, -c, wal_level=logical]
+    ports: ['127.0.0.1:55443:5432']
+    volumes: ['./target.sql:/docker-entrypoint-initdb.d/target.sql:ro']
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U postgres -d target_db']
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  nats:
+    image: nats:2.11-alpine
+    command: [-c, /etc/nats/lab.conf]
+    ports: ['127.0.0.1:4232:4222']
+    volumes: ['./nats.conf:/etc/nats/lab.conf:ro']

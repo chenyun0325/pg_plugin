@@ -30,17 +30,26 @@ type FunctionConfig struct {
 }
 
 type RouteConfig struct {
-	ID             string                  `yaml:"id" json:"id"`
-	Mode           string                  `yaml:"mode" json:"mode"`
-	Sources        []string                `yaml:"sources" json:"sources"`
-	SourcePatterns []string                `yaml:"source-patterns,omitempty" json:"source-patterns,omitempty"`
-	Target         string                  `yaml:"target" json:"target"`
-	When           *PredicateConfig        `yaml:"when,omitempty" json:"when,omitempty"`
-	Identity       IdentityConfig          `yaml:"identity" json:"identity"`
-	Conflict       string                  `yaml:"conflict" json:"conflict"`
-	Columns        map[string]ColumnConfig `yaml:"columns" json:"columns"`
+	ID              string                  `yaml:"id" json:"id"`
+	Mode            string                  `yaml:"mode" json:"mode"`
+	Sources         []string                `yaml:"sources" json:"sources"`
+	SourcePatterns  []string                `yaml:"source-patterns,omitempty" json:"source-patterns,omitempty"`
+	Target          string                  `yaml:"target" json:"target"`
+	TargetFrom      string                  `yaml:"target-from,omitempty"`
+	AllowedTargets  []string                `yaml:"allowed-targets,omitempty"`
+	JSONPatches     map[string][]JSONPatch  `yaml:"json-patches,omitempty"`
+	RequireExisting bool                    `yaml:"require-existing,omitempty"`
+	When            *PredicateConfig        `yaml:"when,omitempty" json:"when,omitempty"`
+	Identity        IdentityConfig          `yaml:"identity" json:"identity"`
+	Conflict        string                  `yaml:"conflict" json:"conflict"`
+	Columns         map[string]ColumnConfig `yaml:"columns" json:"columns"`
 
 	patterns []*regexp.Regexp
+}
+
+type JSONPatch struct {
+	Path   []string `yaml:"path"`
+	Source string   `yaml:"source"`
 }
 
 type PredicateConfig struct {
@@ -70,6 +79,7 @@ type LineageColumns struct {
 
 type ColumnConfig struct {
 	Source     string            `yaml:"source" json:"source"`
+	Literal    interface{}       `yaml:"literal,omitempty"`
 	Default    interface{}       `yaml:"default,omitempty" json:"default,omitempty"`
 	Transforms []TransformConfig `yaml:"transforms,omitempty" json:"transforms,omitempty"`
 }
@@ -138,15 +148,37 @@ func (c *Config) validate() error {
 				return fmt.Errorf("route %s source %q must be schema.table", r.ID, source)
 			}
 		}
-		if !qualified(r.Target) {
+		if r.TargetFrom != "" {
+			if r.TargetFrom != "lineage" || r.Target != "" || len(r.AllowedTargets) == 0 {
+				return fmt.Errorf("route %s target-from lineage requires only allowed-targets", r.ID)
+			}
+			for _, target := range r.AllowedTargets {
+				if !qualified(target) {
+					return fmt.Errorf("invalid allowed target %s", target)
+				}
+			}
+		} else if !qualified(r.Target) {
 			return fmt.Errorf("route %s target %q must be schema.table", r.ID, r.Target)
 		}
 		if len(r.Columns) == 0 {
 			return fmt.Errorf("route %s needs an explicit columns projection", r.ID)
 		}
 		for target, column := range r.Columns {
-			if target == "" || column.Source == "" {
+			if target == "" || (column.Source == "" && column.Literal == nil) || (column.Source != "" && column.Literal != nil) {
 				return fmt.Errorf("route %s has an empty target/source column", r.ID)
+			}
+		}
+		for column, patches := range r.JSONPatches {
+			if column == "" || len(patches) == 0 {
+				return fmt.Errorf("empty JSON patches")
+			}
+			if _, exists := r.Columns[column]; exists {
+				return fmt.Errorf("JSON patch column %s cannot also be projected", column)
+			}
+			for _, patch := range patches {
+				if len(patch.Path) == 0 || patch.Source == "" {
+					return fmt.Errorf("JSON patch needs path and source")
+				}
 			}
 		}
 		switch r.Identity.Strategy {
@@ -154,6 +186,14 @@ func (c *Config) validate() error {
 			lineage := r.Identity.LineageColumns
 			if lineage.Source == lineage.Table || lineage.Source == lineage.Key || lineage.Table == lineage.Key {
 				return fmt.Errorf("route %s lineage column names must be distinct", r.ID)
+			}
+			for _, name := range []string{lineage.Source, lineage.Table, lineage.Key} {
+				if _, exists := r.Columns[name]; exists {
+					return fmt.Errorf("route %s cannot overwrite protected lineage column %s", r.ID, name)
+				}
+				if _, exists := r.JSONPatches[name]; exists {
+					return fmt.Errorf("route %s cannot patch protected lineage column %s", r.ID, name)
+				}
 			}
 		case "mapped":
 			if len(r.Identity.TargetKey) == 0 {

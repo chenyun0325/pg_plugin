@@ -1,0 +1,56 @@
+api-version: pgflo/v1
+kind: ReplicationJob
+metadata: {name: json-reverse-demo}
+source:
+  id: merged-json-demo
+  host: 127.0.0.1
+  port: 56543
+  database: json_source
+  user: postgres
+  password: ''
+  schema: app
+  tables: [orders, cdc_meta.tx_context]
+  group: pgflo_json_reverse
+  mode: stream
+  filter-replication-origins: false
+nats: {url: 'nats://127.0.0.1:4242', max-age: 0s, replicas: 1}
+sink:
+  host: 127.0.0.1
+  port: 56543
+  database: json_target
+  user: postgres
+  password: ''
+  replication-origin: pgflo_json_reverse_origin
+replay-v2:
+  namespace: json_demo
+  direction: reverse
+  uid-field: uid
+  peer-origin: pgflo_json_forward_origin
+  source-stream-id: json-demo-stream-v1
+mapping:
+  version: json-demo-v1
+  source-id: merged-json-demo
+  loop-protection: true
+  unmatched: error
+  functions: [{name: trim_space}]
+  routes:
+    - id: restore-original-shard
+      sources: [app.orders]
+      target-from: lineage
+      allowed-targets: [legacy.orders_0, legacy.orders_1]
+      require-existing: true
+      identity: {strategy: mapped, target-key: [id], delete-policy: ignore}
+      conflict: error
+      columns:
+        id:
+          source: __owner_pk_0
+          transforms: [{function: to_int64}]
+        uid: {source: uid}
+        customer_name:
+          source: payload
+          transforms:
+            - {function: json_get, args: [customer, name]}
+            - {function: trim_space}
+      json-patches:
+        document:
+          - {path: [stock, reserved], source: reserved_qty}

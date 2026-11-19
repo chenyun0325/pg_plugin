@@ -62,7 +62,7 @@ func newJobCommand() *cobra.Command {
 	if err := previewCmd.MarkFlagRequired("events"); err != nil {
 		panic(err)
 	}
-	jobCmd.AddCommand(validateCmd, previewCmd, replicatorCmd, workerCmd, runCmd)
+	jobCmd.AddCommand(validateCmd, previewCmd, replicatorCmd, workerCmd, runCmd, newReplaySetupCommand(), newOwnershipCommand())
 	return jobCmd
 }
 
@@ -84,6 +84,12 @@ func createJobNATS(job *jobconfig.Job) (*pgflonats.NATSClient, error) {
 }
 
 func createJobReplicator(job *jobconfig.Job, natsClient *pgflonats.NATSClient) (replicator.Replicator, error) {
+	if err := requireReplayBaseline(job); err != nil {
+		return nil, err
+	}
+	if err := validateReplayTransport(job, natsClient); err != nil {
+		return nil, err
+	}
 	var factory replicator.Factory
 	switch job.Source.Mode {
 	case "copy":
@@ -96,17 +102,26 @@ func createJobReplicator(job *jobconfig.Job, natsClient *pgflonats.NATSClient) (
 	return factory.CreateReplicator(job.ReplicatorConfig(), natsClient)
 }
 
-func createJobWorker(job *jobconfig.Job, natsClient *pgflonats.NATSClient) (*worker.Worker, *sinks.PostgresSink, error) {
+func createJobWorker(job *jobconfig.Job, natsClient *pgflonats.NATSClient) (*worker.Worker, sinks.ManagedSink, error) {
+	if err := requireReplayBaseline(job); err != nil {
+		return nil, nil, err
+	}
 	mapper, err := mapping.NewEngine(job.Mapping)
 	if err != nil {
 		return nil, nil, err
 	}
-	sink, err := sinks.NewPostgresSinkWithConfig(sinks.PostgresSinkConfig{
+	connection := sinks.PostgresSinkConfig{
 		TargetHost: job.Sink.Host, TargetPort: job.Sink.Port, TargetDBName: job.Sink.Database,
 		TargetUser: job.Sink.User, TargetPassword: job.Sink.Password,
 		DisableForeignKeyChecks: job.Sink.DisableForeignKeys,
 		ReplicationOrigin:       job.Sink.Origin,
-	})
+	}
+	var sink sinks.ManagedSink
+	if job.Replay != nil {
+		sink, err = sinks.NewReplaySink(connection, *job.Replay, job.Source.Group, job.Mapping)
+	} else {
+		sink, err = sinks.NewPostgresSinkWithConfig(connection)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -191,18 +206,29 @@ func runCompleteJob(cmd *cobra.Command, _ []string) error {
 	errCh := make(chan error, 2)
 	go func() { errCh <- w.Start(ctx) }()
 	go func() { errCh <- rep.Start(ctx) }()
+	remaining := 2
 	select {
 	case <-ctx.Done():
 	case err = <-errCh:
-		if err != nil && err != context.Canceled {
-			cancel()
-		} else {
+		remaining--
+		if err == context.Canceled {
 			err = nil
-			cancel()
 		}
 	}
+	cancel()
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
+	for remaining > 0 {
+		select {
+		case stopped := <-errCh:
+			remaining--
+			if err == nil && stopped != context.Canceled {
+				err = stopped
+			}
+		case <-shutdownCtx.Done():
+			return fmt.Errorf("job did not finish shutdown: %w", shutdownCtx.Err())
+		}
+	}
 	if stopErr := rep.Stop(shutdownCtx); stopErr != nil && err == nil {
 		err = stopErr
 	}
@@ -256,13 +282,15 @@ func runJobPreview(cmd *cobra.Command, _ []string) error {
 		}
 		for _, output := range outputs {
 			view := map[string]interface{}{
-				"transaction-id": output.TransactionID,
-				"operation":      output.Type,
-				"target":         output.Schema + "." + output.Table,
-				"key-columns":    output.ReplicationKey.Columns,
-				"values":         output.Values,
-				"old-values":     output.OldValues,
-				"conflict":       output.ConflictAction,
+				"transaction-id":   output.TransactionID,
+				"operation":        output.Type,
+				"target":           output.Schema + "." + output.Table,
+				"key-columns":      output.ReplicationKey.Columns,
+				"values":           output.Values,
+				"old-values":       output.OldValues,
+				"conflict":         output.ConflictAction,
+				"json-patches":     output.JSONPatches,
+				"require-existing": output.RequireExisting,
 			}
 			if err := encoder.Encode(view); err != nil {
 				return err

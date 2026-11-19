@@ -27,6 +27,8 @@
 
 [View detailed examples →](internal/examples/README.md)
 
+[YAML mapping, UID ownership and repeated MySQL/PG cutovers (中文)](examples/uid-replay/README.zh-CN.md)
+
 ## Quick Start
 
 ### Prerequisites
