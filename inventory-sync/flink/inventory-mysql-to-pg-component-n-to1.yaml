@@ -1,0 +1,71 @@
+# Flink CDC 3.7 N:1 landing job.
+# Requires the workspace's custom PostgreSQL Pipeline sink and the merged-node
+# SQL scripts 10, 20 and 15. The one sink row represents one source component;
+# PostgreSQL then combines three component kinds into inventory_summary.
+
+source:
+  type: mysql
+  name: Inventory-MySQL-N-to-1-Source
+  hostname: '__MYSQL_HOST__'
+  port: __MYSQL_PORT__
+  username: '__MYSQL_USER__'
+  password: '__MYSQL_PASSWORD__'
+  tables: 'StoreServer.mem_user_inventory,StoreServer.mem_user_inventory_lock,StoreServer.mem_user_inventory_tracking'
+  server-id: 6510-6517
+  #server-time-zone: Asia/Shanghai
+  connection.pool.size: 8
+  scan.startup.mode: initial
+  #scan.incremental.snapshot.enabled: true
+  scan.incremental.snapshot.chunk.size: 20000
+  scan.snapshot.fetch.size: 5000
+  scan.incremental.close-idle-reader.enabled: true
+  scan.newly-added-table.enabled: false
+  schema-change.enabled: false
+  heartbeat.interval: 30s
+  connect.timeout: 30s
+  connect.max-retries: 10
+  jdbc.properties.useSSL: false
+
+sink:
+  type: postgres
+  name: Inventory-PostgreSQL-Component-Sink
+  hostname: '__PG_HOST__'
+  port: __PG_PORT__
+  database-name: '__PG_DATABASE__'
+  username: '__PG_USER__'
+  password: '__PG_PASSWORD__'
+  create-schema.enabled: false
+  default-schema: inventory_flink_stage
+  server-time-zone: Asia/Shanghai
+  sink.buffer-flush.max-rows: 2000
+  sink.buffer-flush.interval: 2s
+  sink.max-retries: 3
+  statement-cache.max-size: 64
+  dangerous-ddl.enabled: false
+  no-primary-key.action: fail
+
+transform:
+  - source-table: StoreServer.mem_user_inventory
+    projection: "__table_name__ || '_' || id AS source_row_id, __table_name__ AS source_table, id AS source_id, 'ON_HAND' AS quantity_kind, upc, uid, wh_id, quantity, last_update_time"
+    primary-keys: source_row_id
+  - source-table: StoreServer.mem_user_inventory_lock
+    projection: "__table_name__ || '_' || id AS source_row_id, __table_name__ AS source_table, id AS source_id, 'RESERVED' AS quantity_kind, upc, uid, wh_id, quantity, last_update_time"
+    primary-keys: source_row_id
+  - source-table: StoreServer.mem_user_inventory_tracking
+    projection: "__table_name__ || '_' || id AS source_row_id, __table_name__ AS source_table, id AS source_id, 'HOLD' AS quantity_kind, upc, uid, wh_id, quantity, last_update_time"
+    primary-keys: source_row_id
+
+route:
+  - source-table: 'StoreServer\.mem_user_inventory(_lock|_tracking)?'
+    sink-table: inventory_flink_stage.inventory_component
+
+pipeline:
+  name: Inventory-MySQL-To-PostgreSQL-Component-N-to-1
+  parallelism: 4
+  local-time-zone: Asia/Shanghai
+  schema.change.behavior: IGNORE
+  flink-conf:
+    execution.checkpointing.interval: 30s
+    execution.checkpointing.min-pause: 10s
+    execution.checkpointing.timeout: 10min
+    execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION

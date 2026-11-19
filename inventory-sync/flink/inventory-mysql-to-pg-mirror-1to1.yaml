@@ -1,0 +1,64 @@
+# Flink CDC 3.7 Pipeline YAML.
+# IMPORTANT: Apache Flink CDC 3.7 does not ship an official PostgreSQL Pipeline
+# sink. "type: postgres" below requires the custom PostgreSQL sink already used
+# by this workspace. Render __PLACEHOLDER__ values at deployment time.
+
+source:
+  type: mysql
+  name: Inventory-MySQL-Source
+  hostname: '__MYSQL_HOST__'
+  port: __MYSQL_PORT__
+  username: '__MYSQL_USER__'
+  password: '__MYSQL_PASSWORD__'
+  tables: 'StoreServer.mem_user_inventory,StoreServer.mem_user_inventory_lock,StoreServer.mem_user_inventory_tracking'
+  server-id: 6500-6507
+  server-time-zone: Asia/Shanghai
+  connection.pool.size: 8
+  scan.startup.mode: initial
+  scan.incremental.snapshot.enabled: true
+  scan.incremental.snapshot.chunk.size: 20000
+  scan.snapshot.fetch.size: 5000
+  scan.incremental.close-idle-reader.enabled: true
+  scan.newly-added-table.enabled: false
+  schema-change.enabled: false
+  heartbeat.interval: 30s
+  connect.timeout: 30s
+  connect.max-retries: 10
+  jdbc.properties.useSSL: false
+
+sink:
+  type: postgres
+  name: Inventory-PostgreSQL-Mirror-Sink
+  hostname: '__PG_HOST__'
+  port: __PG_PORT__
+  database-name: '__PG_DATABASE__'
+  username: '__PG_USER__'
+  password: '__PG_PASSWORD__'
+  create-schema.enabled: false
+  default-schema: inventory_mirror
+  server-time-zone: Asia/Shanghai
+  sink.buffer-flush.max-rows: 2000
+  sink.buffer-flush.interval: 2s
+  sink.max-retries: 3
+  statement-cache.max-size: 64
+  dangerous-ddl.enabled: false
+  no-primary-key.action: fail
+
+route:
+  - source-table: StoreServer.mem_user_inventory
+    sink-table: inventory_mirror.mem_user_inventory
+  - source-table: StoreServer.mem_user_inventory_lock
+    sink-table: inventory_mirror.mem_user_inventory_lock
+  - source-table: StoreServer.mem_user_inventory_tracking
+    sink-table: inventory_mirror.mem_user_inventory_tracking
+
+pipeline:
+  name: Inventory-MySQL-To-PostgreSQL-Mirror-1to1
+  parallelism: 4
+  local-time-zone: Asia/Shanghai
+  schema.change.behavior: IGNORE
+  flink-conf:
+    execution.checkpointing.interval: 30s
+    execution.checkpointing.min-pause: 10s
+    execution.checkpointing.timeout: 10min
+    execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION

@@ -1,0 +1,31 @@
+version: 1
+job: inventory_mirror_to_summary_v1
+source:
+  id: mysql_inventory_mirror
+  dsn-env: INVENTORY_MIRROR_DSN
+  publication: inventory_mirror_pub
+  slot: inv_mirror_to_summary_v1
+  plugin: pgoutput
+  snapshot: copy
+sink:
+  dsn-env: INVENTORY_MERGED_DSN
+  origin: pgcat_inventory_from_mirror
+route:
+  - name: copy_inventory_stage
+    source-table: 'inventory_mirror\.mem_user_inventory'
+    sink-table: inventory_stage.mem_user_inventory
+    source-key: [id]
+    primary-keys: [id]
+    include-all: true
+  - name: copy_inventory_lock_stage
+    source-table: 'inventory_mirror\.mem_user_inventory_lock'
+    sink-table: inventory_stage.mem_user_inventory_lock
+    source-key: [id]
+    primary-keys: [id]
+    include-all: true
+  - name: copy_inventory_tracking_stage
+    source-table: 'inventory_mirror\.mem_user_inventory_tracking'
+    sink-table: inventory_stage.mem_user_inventory_tracking
+    source-key: [id]
+    primary-keys: [id]
+    include-all: true

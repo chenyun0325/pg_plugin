@@ -1,0 +1,46 @@
+# Requires the separately supplied custom PostgreSQL Pipeline sink.
+# Render through scripts/Render-And-Submit-Flink.ps1; never commit real secrets.
+source:
+  type: mysql
+  name: Inventory-MySQL-Source
+  hostname: '__MYSQL_HOST__'
+  port: __MYSQL_PORT__
+  username: '__MYSQL_USER__'
+  password: '__MYSQL_PASSWORD__'
+  tables: 'StoreServer.mem_user_inventory,StoreServer.mem_user_inventory_lock,StoreServer.mem_user_inventory_tracking'
+  server-id: 6500-6507
+  server-time-zone: Asia/Shanghai
+  scan.startup.mode: initial
+  scan.incremental.snapshot.enabled: true
+  schema-change.enabled: false
+sink:
+  type: postgres
+  name: Inventory-PostgreSQL-Mirror-Sink
+  hostname: '__PG_HOST__'
+  port: __PG_PORT__
+  database-name: '__PG_DATABASE__'
+  username: '__PG_USER__'
+  password: '__PG_PASSWORD__'
+  create-schema.enabled: false
+  default-schema: inventory_mirror
+  server-time-zone: Asia/Shanghai
+  sink.buffer-flush.max-rows: 2000
+  sink.buffer-flush.interval: 2s
+  sink.max-retries: 3
+  dangerous-ddl.enabled: false
+  no-primary-key.action: fail
+route:
+  - source-table: StoreServer.mem_user_inventory
+    sink-table: inventory_mirror.mem_user_inventory
+  - source-table: StoreServer.mem_user_inventory_lock
+    sink-table: inventory_mirror.mem_user_inventory_lock
+  - source-table: StoreServer.mem_user_inventory_tracking
+    sink-table: inventory_mirror.mem_user_inventory_tracking
+pipeline:
+  name: Inventory-MySQL-To-PostgreSQL-Mirror-1to1
+  parallelism: 4
+  local-time-zone: Asia/Shanghai
+  schema.change.behavior: IGNORE
+  flink-conf:
+    execution.checkpointing.interval: 30s
+    execution.checkpointing.timeout: 10min

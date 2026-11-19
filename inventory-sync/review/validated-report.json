@@ -1,0 +1,157 @@
+{
+  "completed_at": "2026-11-18T12:22:21.8574400+08:00",
+  "success": true,
+  "postgres": "postgres (PostgreSQL) 18.7",
+  "go": "go version go1.27.4 windows/amd64",
+  "port": 56489,
+  "scope": "isolated PostgreSQL cluster with three databases; MySQL and Flink not executed",
+  "checks": [
+    {
+      "name": "projection smoke rolls back all rows",
+      "result": "PASS",
+      "value": "t"
+    },
+    {
+      "name": "forward snapshot merges three quantities and timestamp",
+      "result": "PASS",
+      "value": "t"
+    },
+    {
+      "name": "summary and outbox agree",
+      "result": "PASS",
+      "value": "t"
+    },
+    {
+      "name": "read-only merged diagnostic returns zero issues",
+      "result": "PASS"
+    },
+    {
+      "name": "reverse snapshot splits to three tables",
+      "result": "PASS",
+      "value": "t"
+    },
+    {
+      "name": "reverse IDs use summary ID not original lock ID",
+      "result": "PASS",
+      "value": "t"
+    },
+    {
+      "name": "deferred projection validates final transaction state",
+      "result": "PASS",
+      "value": "t"
+    },
+    {
+      "name": "forward-origin incremental events do not cascade to rollback",
+      "result": "PASS",
+      "value": "t"
+    },
+    {
+      "name": "anchor deletion removes summary and outbox",
+      "result": "PASS",
+      "value": "t"
+    },
+    {
+      "name": "forward-origin deletion also does not cascade",
+      "result": "PASS",
+      "value": "t"
+    },
+    {
+      "name": "local confirmed insert fans out",
+      "result": "PASS",
+      "value": "t"
+    },
+    {
+      "name": "existing unmarked mirror row cannot be adopted by changing schema",
+      "result": "PASS",
+      "value": "t"
+    },
+    {
+      "name": "target failure leaves checkpoint unchanged",
+      "result": "PASS",
+      "value": "0/2699AA0"
+    },
+    {
+      "name": "target failure rolls back all three projections",
+      "result": "PASS",
+      "value": "t"
+    },
+    {
+      "name": "same config resumes failed WAL transaction",
+      "result": "PASS",
+      "value": "t"
+    },
+    {
+      "name": "new process with no source changes causes no duplicate rows",
+      "result": "PASS",
+      "value": "t"
+    },
+    {
+      "name": "legacy compatibility failure rolls back summary too",
+      "result": "PASS",
+      "value": "t"
+    },
+    {
+      "name": "invalid final state rolls back stage summary and outbox",
+      "result": "PASS",
+      "value": "t"
+    },
+    {
+      "name": "TBA exists without entering legacy outbox",
+      "result": "PASS",
+      "value": "t"
+    },
+    {
+      "name": "TBA creates no rollback row",
+      "result": "PASS",
+      "value": "t"
+    },
+    {
+      "name": "local confirmed deletion removes all three rollback rows",
+      "result": "PASS",
+      "value": "t"
+    },
+    {
+      "name": "existing pgcat real WAL bidirectional regression",
+      "result": "PASS"
+    }
+  ],
+  "failure": null,
+  "source_hashes": [
+    {
+      "file": "pgcat-yaml/runtime.go",
+      "sha256": "3392FC7CCFA625609B702788806BAC033B45A7CA5EEB16FEB3B94FA4E69B931A"
+    },
+    {
+      "file": "pgcat-yaml/engine.go",
+      "sha256": "6B036288F10C00E615AD4602B2587C47E453C43A930607D9EAE3C226791145C3"
+    },
+    {
+      "file": "pgcat-yaml/store.go",
+      "sha256": "024E734953A0460E8A09A1C17C90CC8C8F7298AD0B6227882FCDAFD40BC1287F"
+    },
+    {
+      "file": "pgcat-yaml/inventory_functions.go",
+      "sha256": "2E7329CC9C776DD73628E921CDDF314B3AE40B7A22FAA60B94E00E1A8A789A89"
+    },
+    {
+      "file": "inventory-sync/sql/10_pg_merged.sql",
+      "sha256": "0A67B57D2F70A9EF936E24DE849B4D269E1679943C63FE9486C9D948F953515F"
+    },
+    {
+      "file": "inventory-sync/sql/20_pg_merged_projection.sql",
+      "sha256": "F18B2D2178962C520422A69FAD01D62D3EC074126C27BD3416C75E1F8FD077AA"
+    },
+    {
+      "file": "inventory-sync/pgcat/mirror-to-summary-n-to1.yaml",
+      "sha256": "807F9E3B8A598D09EF703DD0D368C9E47DCE89994FF5DF195CE452DD4AE78E63"
+    },
+    {
+      "file": "inventory-sync/pgcat/summary-to-rollback-1ton.yaml",
+      "sha256": "1FE131D0AAF9B6B2D6165D76DAC601756B512C5D7FA1B439D7DEF462EEF5A8A4"
+    },
+    {
+      "file": "inventory-sync/review/Run-ReviewLab.ps1",
+      "sha256": "C81C55258AB2FE75EF9E7204C18C539A0317DD72E2B6E407ED0456C8664DDB26"
+    }
+  ]
+}

@@ -6,3 +6,7 @@ pgcat-yaml/bin/
 /job-yaml/
 output/**/bin/
 /output/pgcat-sidecar-source.zip
+*.local.yaml
+/inventory-sync/flink/*-bak.yaml
+/output/pgflo-inventory-wms/
+/output/pgflo-uid-replay/

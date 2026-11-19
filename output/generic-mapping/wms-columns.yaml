@@ -1,0 +1,1144 @@
+# Converted route/transform rules only; no credentials or connector settings copied.
+# Connect to PG mirror tables. Validate physical UNIQUE/NOT NULL source keys and target DDL.
+# json() maps to deterministic json_get; arbitrary Java UDF classes are not executed.
+version: 1
+job: wms_merge_v1
+source:
+    id: wms_legacy_pg
+    dsn-env: PGCAT_SOURCE_DSN
+    publication: pgcat_wms_pub
+    slot: pgcat_wms_v1
+    plugin: pgoutput
+    snapshot: copy
+sink:
+    dsn-env: PGCAT_TARGET_DSN
+    origin: pgcat_wms_from_legacy
+route:
+    - name: wms_001
+      source-table: StoreServer\.sys_warehouse_outbound_([0-9]+|[0-9]+_history)
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_002
+      source-table: StoreServer\.thd_warehouse_outbound
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_003
+      source-table: StoreServer\.mem_supplier_warehouse_outbound
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_004
+      source-table: StoreServer\.sys_warehouse_outbound_info_([0-9]+|[0-9]+_history)
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_info_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_005
+      source-table: StoreServer\.thd_warehouse_outbound_info
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_info_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_006
+      source-table: StoreServer\.mem_supplier_warehouse_outbound_info
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_info_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_007
+      source-table: StoreServer\.sys_warehouse_outbound_product_([0-9]+|[0-9]+_history)
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_product_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_008
+      source-table: StoreServer\.thd_warehouse_outbound_product
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_product_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_009
+      source-table: StoreServer\.mem_supplier_warehouse_outbound_product
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_product_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_010
+      source-table: StoreServer\.sys_warehouse_outbound_product_bo_sn_([0-9]+|[0-9]+_history)
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_product_bo_sn_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_011
+      source-table: StoreServer\.thd_warehouse_outbound_product_bo_sn
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_product_bo_sn_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_012
+      source-table: StoreServer\.sys_warehouse_outbound_product_location_([0-9]+|[0-9]+_history)
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_product_location_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_013
+      source-table: StoreServer\.thd_warehouse_outbound_product_location
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_product_location_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_014
+      source-table: StoreServer\.sys_warehouse_outbound_review_([0-9]+|[0-9]+_history)
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_review
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_015
+      source-table: StoreServer\.thd_warehouse_outbound_review
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_review
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_016
+      source-table: StoreServer\.sys_warehouse_outbound_sn_record_([0-9]+|[0-9]+_history)
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_sn_record_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_017
+      source-table: StoreServer\.thd_warehouse_outbound_sn_record
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_sn_record_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_018
+      source-table: StoreServer\.mem_supplier_warehouse_outbound_sn_record
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_sn_record_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_019
+      source-table: StoreServer\.mem_supplier_warehouse_outbound_sn_record_history
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_sn_record_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_020
+      source-table: StoreServer\.sys_warehouse_outbound_tracking_([0-9]+|[0-9]+_history)
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_tracking_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_021
+      source-table: StoreServer\.thd_warehouse_outbound_tracking
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_tracking_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_022
+      source-table: StoreServer\.mem_supplier_warehouse_outbound_tracking
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_tracking_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_023
+      source-table: StoreServer\.sys_warehouse_outbound_upload_file_record_([0-9]+|[0-9]+_history)
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_upload_file_record_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_024
+      source-table: StoreServer\.thd_warehouse_outbound_upload_file_record
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_upload_file_record_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_025
+      source-table: StoreServer\.mem_supplier_warehouse_outbound_upload_file_record
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_upload_file_record_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_026
+      source-table: StoreServer\.sys_warehouse_outbound_ticket_([0-9]+|[0-9]+_history)
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_ticket
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_027
+      source-table: StoreServer\.sys_warehouse_outbound_ticket_product_location_([0-9]+|[0-9]+_history)
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_ticket_product_location
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_028
+      source-table: StoreServer\.sys_warehouse_outbound_toter_([0-9]+|[0-9]+_history)
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_toter
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_029
+      source-table: StoreServer\.sys_warehouse_outbound_toter_log_([0-9]+|[0-9]+_history)
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_toter_log
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_030
+      source-table: StoreServer\.sys_warehouse_outbound_discount_bill_([0-9]+|[0-9]+_history)
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_discount_bill_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_031
+      source-table: StoreServer\.thd_warehouse_outbound_discount_bill
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_discount_bill_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_032
+      source-table: StoreServer\.sys_warehouse_outbound_first_bill_([0-9]+|[0-9]+_history)
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_first_bill_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_033
+      source-table: StoreServer\.thd_warehouse_outbound_first_bill
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_first_bill_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_034
+      source-table: StoreServer\.sys_warehouse_outbound_lable_bill_([0-9]+|[0-9]+_history)
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_lable_bill_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_035
+      source-table: StoreServer\.thd_warehouse_outbound_lable_bill
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_lable_bill_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_036
+      source-table: StoreServer\.sys_warehouse_outbound_material_bill_([0-9]+|[0-9]+_history)
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_material_bill_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_037
+      source-table: StoreServer\.thd_warehouse_outbound_material_bill
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_material_bill_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_038
+      source-table: StoreServer\.sys_warehouse_outbound_package_bill_([0-9]+|[0-9]+_history)
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_package_bill_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_039
+      source-table: StoreServer\.thd_warehouse_outbound_package_bill
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_package_bill_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_040
+      source-table: StoreServer\.sys_warehouse_outbound_postage_bill_([0-9]+|[0-9]+_history)
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_postage_bill_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_041
+      source-table: StoreServer\.thd_warehouse_outbound_postage_bill
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_postage_bill_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_042
+      source-table: StoreServer\.mem_supplier_warehouse_outbound_postage_bill
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_postage_bill_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_043
+      source-table: StoreServer\.sys_warehouse_outbound_record_sn_bill_([0-9]+|[0-9]+_history)
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_record_sn_bill_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_044
+      source-table: StoreServer\.thd_warehouse_outbound_record_sn_bill
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_record_sn_bill_m
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_045
+      source-table: StoreServer\.sys_warehouse_outbound_reward_for_trade_bill_([0-9]+|[0-9]+_history)
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_reward_for_trade_bill
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_046
+      source-table: StoreServer\.sys_warehouse_outbound_tracking_lable_bill_([0-9]+|[0-9]+_history)
+      sink-table: StoreServerHaV2.sys_warehouse_outbound_tracking_lable_bill
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+    - name: wms_047
+      source-table: StoreServer\..*
+      sink-table: StoreServerHaV2.<>
+      replace-symbol: <>
+      exclude-source-tables:
+        - StoreServer\..*(?:_[0-9]+|_[0-9]+_history)
+      use-transform: true
+      source-key:
+        - id
+      primary-keys:
+        - _sync_source
+        - _sync_table
+        - _sync_pk
+      include-all: true
+      adopt-unmarked-source: ""
+      require-existing: false
+      on-delete: ""
+      exclude: []
+      columns: {}
+      when: null
+      json-patches: {}
+transform:
+    - source-table: StoreServer\.mem_customer_tracking
+      source-key:
+        - id
+      include-all: true
+      columns:
+        outbound_id:
+            function: json_get
+            args:
+                - from: param
+                - literal: outbound_id
+    - source-table: StoreServer\.sys_warehouse_outbound_([0-9]+|[0-9]+_history)
+      source-key:
+        - outbound_id
+      include-all: true
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+        wh_type:
+            literal: "1"
+    - source-table: StoreServer\.mem_supplier_warehouse_outbound
+      source-key:
+        - outbound_id
+      include-all: true
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+        wh_type:
+            literal: "2"
+    - source-table: StoreServer\.thd_warehouse_outbound
+      source-key:
+        - outbound_id
+      include-all: true
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+        wh_type:
+            literal: "3"
+    - source-table: StoreServer\.sys_warehouse_outbound_sn_record_([0-9]+|[0-9]+_history),StoreServer\.thd_warehouse_outbound_sn_record,StoreServer\.mem_supplier_warehouse_outbound_sn_record,StoreServer\.mem_supplier_warehouse_outbound_sn_record_history
+      source-key:
+        - id
+      include-all: true
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+    - source-table: StoreServer\.sys_warehouse_outbound_upload_file_record_([0-9]+|[0-9]+_history),StoreServer\.thd_warehouse_outbound_upload_file_record,StoreServer\.mem_supplier_warehouse_outbound_upload_file_record
+      source-key:
+        - id
+      include-all: true
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+    - source-table: StoreServer\.sys_warehouse_outbound_info_[0-9]+(?:_history)?,StoreServer\.thd_warehouse_outbound_info,StoreServer\.mem_supplier_warehouse_outbound_info
+      source-key:
+        - outbound_id
+      include-all: true
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+    - source-table: StoreServer\.sys_warehouse_outbound_product_[0-9]+(?:_history)?,StoreServer\.thd_warehouse_outbound_product,StoreServer\.mem_supplier_warehouse_outbound_product
+      source-key:
+        - outbound_id
+        - upc
+      include-all: true
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+    - source-table: StoreServer\.sys_warehouse_outbound_product_bo_sn_[0-9]+(?:_history)?,StoreServer\.thd_warehouse_outbound_product_bo_sn
+      source-key:
+        - outbound_id
+        - upc
+        - bo_sn
+      include-all: true
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+    - source-table: StoreServer\.sys_warehouse_outbound_product_location_[0-9]+(?:_history)?,StoreServer\.thd_warehouse_outbound_product_location
+      source-key:
+        - outbound_id
+        - upc
+        - location_id
+      include-all: true
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+    - source-table: StoreServer\.sys_warehouse_outbound_review_[0-9]+(?:_history)?,StoreServer\.thd_warehouse_outbound_review
+      source-key:
+        - id
+      include-all: true
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+    - source-table: StoreServer\.sys_warehouse_outbound_tracking_[0-9]+(?:_history)?,StoreServer\.thd_warehouse_outbound_tracking,StoreServer\.mem_supplier_warehouse_outbound_tracking
+      source-key:
+        - outbound_id
+        - tracking_number
+        - delete
+      include-all: true
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+    - source-table: StoreServer\.sys_warehouse_outbound_ticket_[0-9]+(?:_history)?
+      source-key:
+        - outbound_ticket_id
+      include-all: true
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_ticket_id
+    - source-table: StoreServer\.sys_warehouse_outbound_ticket_product_location_[0-9]+(?:_history)?
+      source-key:
+        - outbound_ticket_id
+        - upc
+        - location_id
+      include-all: true
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_ticket_id
+    - source-table: StoreServer\.sys_warehouse_outbound_toter_[0-9]+(?:_history)?
+      source-key:
+        - id
+      include-all: true
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+    - source-table: StoreServer\.sys_warehouse_outbound_toter_log_[0-9]+(?:_history)?
+      source-key:
+        - id
+      include-all: true
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id
+    - source-table: StoreServer\.sys_warehouse_outbound_discount_bill_[0-9]+(?:_history)?,StoreServer\.thd_warehouse_outbound_discount_bill
+      source-key:
+        - outbound_id
+      include-all: true
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+    - source-table: StoreServer\.sys_warehouse_outbound_first_bill_[0-9]+(?:_history)?,StoreServer\.thd_warehouse_outbound_first_bill
+      source-key:
+        - outbound_id
+      include-all: true
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+    - source-table: StoreServer\.sys_warehouse_outbound_lable_bill_[0-9]+(?:_history)?,StoreServer\.thd_warehouse_outbound_lable_bill
+      source-key:
+        - outbound_id
+      include-all: true
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+    - source-table: StoreServer\.sys_warehouse_outbound_material_bill_[0-9]+(?:_history)?,StoreServer\.thd_warehouse_outbound_material_bill
+      source-key:
+        - outbound_id
+      include-all: true
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+    - source-table: StoreServer\.sys_warehouse_outbound_package_bill_[0-9]+(?:_history)?,StoreServer\.thd_warehouse_outbound_package_bill,StoreServer\.mem_supplier_warehouse_outbound_postage_bill
+      source-key:
+        - outbound_id
+      include-all: true
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+    - source-table: StoreServer\.sys_warehouse_outbound_postage_bill_[0-9]+(?:_history)?,StoreServer\.thd_warehouse_outbound_postage_bill
+      source-key:
+        - outbound_id
+      include-all: true
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+    - source-table: StoreServer\.sys_warehouse_outbound_record_sn_bill_[0-9]+(?:_history)?,StoreServer\.thd_warehouse_outbound_record_sn_bill
+      source-key:
+        - outbound_id
+      include-all: true
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: outbound_id
+    - source-table: StoreServer\.sys_warehouse_outbound_reward_for_trade_bill_[0-9]+(?:_history)?
+      source-key:
+        - id
+      include-all: true
+      columns:
+        _pk_id:
+            function: concat
+            args:
+                - from: __table_name__
+                - literal: _
+                - from: id

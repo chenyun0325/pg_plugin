@@ -1,0 +1,49 @@
+version: 1
+job: inventory_summary_to_rollback_v1
+source:
+  id: merged_inventory
+  dsn-env: INVENTORY_MERGED_DSN
+  publication: inventory_summary_pub
+  slot: inv_summary_to_rollback_v1
+  plugin: pgoutput
+  snapshot: copy
+sink:
+  dsn-env: INVENTORY_ROLLBACK_DSN
+  origin: pgcat_inventory_from_merged
+route:
+  - name: split_on_hand
+    source-table: 'operations\.inventory_summary_outbox'
+    sink-table: inventory_rollback.mem_user_inventory
+    source-key: [warehouse_id, upc, owner_id]
+    primary-keys: [uid, wh_id, upc]
+    columns:
+      id: {from: summary_id}
+      upc: {from: upc}
+      uid: {from: owner_id}
+      wh_id: {from: legacy_wh_id}
+      quantity: {function: int32_exact, args: [{from: on_hand_qty}]}
+      last_update_time: {from: last_update_time}
+  - name: split_reserved
+    source-table: 'operations\.inventory_summary_outbox'
+    sink-table: inventory_rollback.mem_user_inventory_lock
+    source-key: [warehouse_id, upc, owner_id]
+    primary-keys: [upc, uid, wh_id]
+    columns:
+      id: {from: summary_id}
+      upc: {from: upc}
+      uid: {from: owner_id}
+      wh_id: {from: legacy_wh_id}
+      quantity: {function: int32_exact, args: [{from: reserved_qty}]}
+      last_update_time: {from: last_update_time}
+  - name: split_hold
+    source-table: 'operations\.inventory_summary_outbox'
+    sink-table: inventory_rollback.mem_user_inventory_tracking
+    source-key: [warehouse_id, upc, owner_id]
+    primary-keys: [upc, uid, wh_id]
+    columns:
+      id: {from: summary_id}
+      upc: {from: upc}
+      uid: {from: owner_id}
+      wh_id: {from: legacy_wh_id}
+      quantity: {function: int32_exact, args: [{from: hold_qty}]}
+      last_update_time: {from: last_update_time}
